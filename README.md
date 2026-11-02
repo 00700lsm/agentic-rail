@@ -107,7 +107,6 @@ python3 .rail/runtime/rail.py process graph --format json
 * **필수 항목**: 각 결정은 `### <ID> <제목>`으로 시작하며, 아래 5개 항목(`Scope`, `Status`, `Decision`, `Forbidden`, `Reason`)을 모두 적어주어야 합니다. ID는 프로젝트 전체에서 고유해야 합니다.
 * **적용 범위(`Scope`)**: 해당 `PRECEDENT.md`가 위치한 폴더를 기준으로 적용할 경로 패턴을 쉼표(`,`)로 구분해 적습니다. Python `fnmatch` 규칙을 따르므로 `backend/*`라고 적으면 `backend/` 하위 모든 폴더와 파일에 적용됩니다. 상위 폴더(`..`)로 벗어나는 패턴은 사용할 수 없습니다.
 * **만료된 결정(`retired`)**: `Status: retired`로 바꾼 결정은 히스토리로만 남고, 에이전트에게 전달하는 `brief`나 `context` 출력에서는 제외됩니다.
-* 작성 예시는 [사용자 관리 PRECEDENT 예시](examples/user-management/PRECEDENT.md)에서 확인할 수 있습니다.
 
 ## 3. 경량 작업(`task`) 관리와 에이전트 위임
 
