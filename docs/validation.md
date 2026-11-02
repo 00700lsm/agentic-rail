@@ -29,7 +29,7 @@ settings update and obsolete hooks.py deletion, then run init. Verify only the e
 Rail hook command is gone, other handlers remain, and the copied CLI works. Restart the host.
 Custom commands must be removed manually. No automatic read-time injection or edit blocking
 should remain from Rail. Old receipt files are unused.
-# Development process validation (v0.2.0)
+## Legacy development process validation (v0.2.0 compatibility)
 
 Run `python3 -m unittest discover -s tests -v`. Process tests cover skipped-stage and legacy-finish
 bypasses, stale checks after rework/reconcile, self-review rejection, Mock implementation versus
@@ -39,3 +39,15 @@ remain unchanged and validate backward compatibility.
 
 These tests use fixture evidence; they do not count as real project integration or LLM compliance.
 Host/model dispatch, source revision truth and external GitHub policy remain unverified.
+
+## Collaboration and nested development (v0.3.0)
+
+Tests cover mandatory mock/unit/contract checks, request-before-approval, owner review rejection,
+request-changes and fresh approval after rework; all-member readiness and explicit milestone
+arrival; missing provider membership, batch mismatch, per-PR alternative; live NOT_RUN/FAIL
+blocking; affected-task routing; revision/cycle drift invalidating running/completed integration;
+new attempts without stale PASS; duplicate plan protection and copied runtime commands.
+The v1 test fixture explicitly installs process-v1.json to protect the previous lifecycle.
+
+All test evidence is synthetic. Actual PoC live service tests and GitHub approvals remain
+NOT_RUN by this repository test suite. audit validates PRECEDENT syntax, not all workflow state.

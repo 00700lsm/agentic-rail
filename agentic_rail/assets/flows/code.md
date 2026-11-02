@@ -9,8 +9,9 @@
    otherwise report the exact conflict. Never rewrite a decision merely to make a check pass.
 6. Run relevant regression checks and real consumer/provider integration. Record command,
    versions/commit IDs and evidence. Legacy task finish requires an integration PASS.
-   With process start, verify requires unit and contract PASS, review marks implementation
-   complete, and integrate separately requires actual integration PASS. Use process advance;
-   task finish cannot bypass development stages.
+   With v2 process start, verify requires unit/contract/mock PASS; record the PR request and
+   approval before review advances to ready. Collaboration owns actual integration at the agreed
+   milestone. Existing v1 process definitions keep their eight-stage lifecycle.
+   task finish cannot bypass either development lifecycle.
 7. For approved decision changes, update PRECEDENT.md and run task reconcile. Review the diff.
 8. Prepare a reviewable PR; merging/deploying follows the user's scope and repository policy.

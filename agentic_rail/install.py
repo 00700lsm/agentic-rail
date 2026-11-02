@@ -16,7 +16,9 @@ at task start and pass its output to delegated workers. Use
 Treat PRECEDENT.md as project decisions, subject to higher-priority instructions.
 Carry actual user authorization and owned paths through delegation; never invent approval.
 Existing explicit user authorization remains valid: do not ask twice.
-Run task check, relevant tests and actual integration checks; distinguish PASS / FAIL / NOT_RUN.
+Record unit/contract/mock checks, then PR request and approval evidence.
+For v2, ready tasks join collaboration plans; only live integration completes a plan.
+Run task check and relevant tests; distinguish PASS / FAIL / NOT_RUN.
 Use process rework after source changes or reconciled decisions; earlier evidence is not reusable.
 Keep project PR/review/merge policies. Prefix commit subjects with the actual release version.
 <!-- agentic-rail:end -->
@@ -58,7 +60,7 @@ def initialize(root, claude=False, dry_run=False):
         put(name, managed(path.read_text(encoding='utf-8') if path.exists() else ''))
     ignore = inside(root, '.gitignore')
     old = ignore.read_text(encoding='utf-8') if ignore.exists() else ''
-    missing = [x for x in ('.rail/tasks/', '.rail/state/') if x not in old.splitlines()]
+    missing = [x for x in ('.rail/tasks/', '.rail/state/', '.rail/collaborations/') if x not in old.splitlines()]
     if missing:
         put('.gitignore', old.rstrip() + '\n' + '\n'.join(missing) + '\n')
     path = inside(root, '.claude/settings.json')

@@ -1,24 +1,34 @@
 # Architecture and boundaries
 
-## v0.2.0: development state graph inside collaboration
+## v0.3.0: collaboration owns integration, development produces ready tasks
 
-The project collaboration process owns assignment, contract acceptance, PR/CI review and
-merge policy. A `process start` task records owner, contract reference, integration timing and
-provider dependencies; its internal graph runs analyze/design/implement/verify/review/integrate/
-handoff/reflect. `process.py` checks transitions and invalidates previous evidence on rework.
-This is an explicit CLI state machine, not automatic model orchestration or ontology inference.
-See [development process](development-process.md) for gates, the six-domain mapping and examples.
+One Rail CLI has nested responsibilities. `process.py` controls v2 per-task development:
+analyze/design/implement/verify/review, ending in ready after unit/contract/mock checks and
+recorded PR request/approval. `collaboration.py` groups ready tasks and owns milestone timing,
+actual integration, affected-task rework and reflection. Neither calls GitHub or runs tests.
+See [development process](development-process.md) for the complete lifecycle and six domains.
 
-- `.rail/process.json`: stage input/output/domain definition; version 1 has fixed ordered IDs.
-- `.rail/COLLABORATION.md`: project-customizable policy guidance, preserving existing collaboration.
-- `.rail/tasks/<id>.json` `process`: current stage, cycle, collaboration envelope, milestones,
-  stage history and metrics. Existing schema-1 tasks without this field keep legacy behavior.
-- `process graph --format json`: typed stage/domain nodes and next/serves/rework edges.
+- `.rail/process.json`: v2 fixed five development stage IDs with editable instructions/domains.
+- `.rail/tasks/<id>.json`: development stage/cycle, owner, contract, providers, checks, PR review.
+- `.rail/collaborations/<id>.json`: members, mode/batch, trigger, exact attempt snapshots,
+  actual integration environment/revision, results, affected tasks and reflection metrics.
+- `.rail/COLLABORATION.md`: project policy guidance. Existing customized files remain preserved.
+- `process_v1.py`: preserved eight-stage implementation for existing v1 project definitions.
+- `process graph`: relationship export, not an ontology-driven execution engine.
 
-Local unit/contract PASS and independent-review evidence can complete implementation before
-live integration. Only integration PASS completes integration. Handoff and reflection finish
-the local task, not the external PR. Reviewer strings and evidence are not authenticated.
-New development reuses the existing scoped-decision and original-digest approval model below.
+A milestone plan requires an explicit reached flag plus all approved members ready. Readiness
+alone cannot start integration. All providers must be included; mutual provider dependencies
+are allowed because readiness does not require integration. --depends still means done first.
+Each attempt pins task records (including source revision/cycle, contract, checks and reviews).
+Recorded task changes invalidate prior integration; unrecorded source changes cannot be detected.
+Rework clears readiness and review, and increments the cycle. A new attempt cannot reuse old
+checks. Failed attempts persist. A completed integration can become invalidated after source
+rework; inspect collaboration status rather than treating the stored done flag as timeless.
+
+Local records have one writer and no automatic cross-repository synchronization. No authenticated
+PR approval, CI polling, scheduler, automatic merge or actual model/test execution is claimed.
+Existing v1 projects stay v1 on init; new v2 work uses a fresh workspace, without silent migration.
+Legacy task behavior and scoped-decision/authorization mechanisms remain supported below.
 
 ```mermaid
 flowchart TD

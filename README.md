@@ -4,7 +4,7 @@
 
 `agentic-rail`은 AI 에이전트에게 작업을 맡길 때 **"왜 이렇게 설계했는지(설계 결정)", "어디까지 수정해도 되는지(승인 범위)", "실제로 테스트를 통과했는지(검증 근거)"**가 유실되지 않도록 잡아주는 독립 실행형 도구(MVP)입니다.
 
-기존 `agentic-core`의 작업 기록 방식과 설계 결정 전달 방식을 결합해 처음부터 새로 구현했으며, 기존 프로젝트의 단순 포크(Fork)가 아닙니다. 외부 패키지 설치 없이 **Python 3.10 이상 표준 라이브러리**만으로 바로 동작합니다. (현재 버전: **0.2.0**)
+기존 `agentic-core`의 작업 기록 방식과 설계 결정 전달 방식을 결합해 처음부터 새로 구현했으며, 기존 프로젝트의 단순 포크(Fork)가 아닙니다. 외부 패키지 설치 없이 **Python 3.10 이상 표준 라이브러리**만으로 바로 동작합니다. (현재 버전: **0.3.0**)
 
 ## 왜 필요한가요? (핵심 역할)
 
@@ -12,12 +12,12 @@
 
 | 핵심 기능 | 쉽게 풀어쓴 설명 |
 | :--- | :--- |
-| **8단계 개발 프로세스 관리** | `분석(analyze) → 설계(design) → 구현(implement) → 검증(verify) → 리뷰(review) → 통합(integrate) → 인계(handoff) → 회고(reflect)` 순서로 진행하며, 각 단계를 넘어갈 조건과 근거를 확인합니다. |
+| **협업 안의 개발 흐름** | 개별 작업은 분석·설계·구현·Mock 검증·PR 리뷰 후 `ready`. 협업 묶음은 마일스톤에 실제 통합하고 회고까지 기록합니다. |
 | **경로별 설계 결정(`PRECEDENT.md`) 자동 추출** | 에이전트가 전체 문서를 다 읽느라 토큰을 낭비하지 않도록, 현재 수정할 파일 경로(상위·하위 폴더 포함)에 적용되는 설계 결정과 이유만 뽑아 전달합니다. |
-| **임의 설계 변경 차단 및 승인 이력 보존** | 기존에 합의된 설계를 바꿔야 할 때, 상위 에이전트의 임의 지시("그냥 진행해")로는 규칙을 깰 수 없습니다. 실제 사용자의 승인 문구·출처·변경 범위·해시를 기록해야만 변경이 허용됩니다. |
-| **가짜 완료(Mock 통과) 방지** | 검증 상태를 `PASS` / `FAIL` / `NOT_RUN`으로 엄격히 구분하여, 단순 Mock 테스트만 통과한 상태에서 실제 연동(Integration) 없이 작업을 완료 처리하는 것을 막습니다. |
+| **설계 변경 근거 검사** | 승인 문구·출처·변경 범위·해시를 기록하고 CLI 동기화 때 검사합니다. 실제 파일 편집을 차단하는 기능은 아닙니다. |
+| **가짜 완료(Mock 통과) 방지** | 검증 상태를 `PASS` / `FAIL` / `NOT_RUN`으로 엄격히 구분하여, Mock 통과와 PR 승인은 개발 준비 완료이며, 협업 통합 완료에는 별도의 실제 연동 PASS가 필요합니다. |
 | **위임 브리핑(`brief`) 생성** | 서브 에이전트나 다른 모델에게 작업을 넘길 때 목표, 담당 파일, 선행 작업, 적용할 설계 결정, 승인 근거를 하나로 묶은 브리핑 텍스트를 만들어 줍니다. |
-| **협업 맥락 및 재작업 지표 기록** | 담당자, API 계약(Contract) 참조, 선행 작업 완료 여부, 통합 방식(PR별 또는 마일스톤 묶음별)을 유지하고, 단계별 소요 시간·결함 수·재작업(Rework) 시간을 집계합니다. |
+| **협업 맥락 및 재작업 지표 기록** | 담당자, API 계약(Contract) 참조, 선행 작업 완료 여부, 통합 방식(PR별 또는 마일스톤 묶음별)을 유지하고, 단계 이력과 운영자가 입력한 결함 수·재작업 시간을 기록합니다. 단계별 소요 시간은 자동 집계하지 않습니다. |
 | **특정 모델·호스트 비종속** | 모델 호출이나 테스트 실행은 기존 개발 환경(Claude Code, Cursor, CI 등)에 맡기고, `agentic-rail`은 명시적인 CLI를 통해 문맥과 상태만 관리합니다. |
 
 ## 빠른 시작 (설치 및 초기화)
@@ -53,41 +53,43 @@ python3 .rail/runtime/rail.py audit
 python3 .rail/runtime/rail.py context src/user.py
 ```
 
-## 1. 8단계 개발 프로세스(`process`) 사용하기
+## 1. 협업 프로세스 안에서 개발하고 사후 통합하기
 
-기존 프로젝트의 담당자 배정, Contract-first(계약 우선) 개발, 선행 작업 규칙, PR 리뷰·병합 정책을 그대로 유지하면서 8단계 개발 흐름을 관리합니다.
+새 설치는 v2 정의를 사용합니다. 기존 v1 설치는 8단계 흐름을 유지합니다.
 
-* **진행 순서**: `analyze` → `design` → `implement` → `verify` → `review` → `integrate` → `handoff` → `reflect`
-* **재작업(`rework`)**: 중간에 검증이 실패하거나 소스 코드가 바뀌면 `process rework` 명령으로 다시 분석·설계·구현 단계로 되돌아갑니다.
-* **6대 운영 영역 매핑**: `Governance`, `Knowledge`, `Orchestration`, `Engineering`, `Quality`, `Intelligence`는 순서대로 거치는 단계가 아니라 모든 개발 단계에 걸쳐 점검하는 운영 기준이며, `.rail/process.json`에서 각 단계와 연결됩니다.
+| 개별 개발 (`process`) | 협업 통합 (`collaboration`) |
+|---|---|
+| 분석 → 설계 → 구현 | 계약·담당자·의존성·통합 묶음 정의 |
+| 단위·계약·Mock 검증 | 합의한 마일스톤까지 통합 대기 |
+| PR 승인 요청 기록 → 리뷰 결과 기록 | 모든 대상 작업의 승인·ready 확인 |
+| 승인 후 `ready` | 실제 연동 검증 → 회고 → `done` |
+
+**기본 PoC 방향은 마일스톤 사후 통합입니다.** 개별 작업이 ready여도 실제 연동은 아직
+미검증입니다. 협업 담당자가 합의한 시점에 묶음을 시작해야 합니다. 매 PR 통합도 선택할 수
+있으며, 어느 방식도 기존 PR 승인·병합 정책을 대신하지 않습니다.
 
 ```bash
-# 새 프로세스 작업 시작
 python3 .rail/runtime/rail.py process start permission-02 \
   --goal '권한 조회 API 구현' --owner permission-worker \
-  --path backend/permission.py --path frontend/permission.ts \
-  --contract-ref 'contract@<accepted-commit>' \
+  --path backend/permission.py --contract-ref 'contract@<accepted-commit>' \
   --integration-mode milestone --batch M1
-
-# 작업 위임용 브리핑 출력
+python3 .rail/runtime/rail.py collaboration create M1 --task permission-02 \
+  --batch M1 --check G3-G4 --owner coordinator --trigger 'M1 기능 리뷰 완료 후 실제 연동 점검'
 python3 .rail/runtime/rail.py process brief permission-02
-
-# 현재 진행 단계 및 상태 확인
 python3 .rail/runtime/rail.py process status permission-02
-
-# 전체 상태 그래프 확인 (기본 텍스트/Mermaid 또는 JSON)
+python3 .rail/runtime/rail.py collaboration status M1
 python3 .rail/runtime/rail.py process graph
-python3 .rail/runtime/rail.py process graph --format json
 ```
 
-### 완료 상태 구분과 주의사항
-
-* **구현 완료 vs 통합 완료 vs 작업 완료(`done`)**:
-  * 코드 리뷰까지 마치면 **구현 완료**로 표시됩니다.
-  * 실제 통합 검증(Integration)까지 `PASS`해야 **통합 완료**로 표시됩니다.
-  * 작업 상태가 `done`이 되었다는 것은 **PR 인계(handoff)와 회고(reflect)까지 마쳤다**는 뜻이며, 최종 브랜치 병합(Merge)이나 배포 완료와는 별개입니다.
-* **단계 우회 불가**: `process`로 시작한 작업은 기존 `task finish` 명령으로 중간 단계를 건너뛰어 완료 처리할 수 없습니다. (반대로 기존 `task start`로 만든 작업은 예전 완료 규칙을 그대로 따르며 자동으로 `process` 방식으로 바뀌지 않습니다.)
-* **역할 경계**: 단계 전환 조건은 `agentic-rail`이 코드로 검사하지만, 실제 LLM 호출·테스트 구동·리뷰어 인증은 실행 환경(호스트)과 기존 CI가 담당합니다. 자세한 단계별 실행 예시와 그래프는 [개발 프로세스 상세 문서](docs/development-process.md)를 참고하세요.
+- PR 요청은 `process request-review`, 결과는 `process review-result`로 **근거를 기록**합니다.
+  실제 GitHub 요청/승인 API를 호출하지 않습니다. 승인 전 ready 전환은 거부됩니다.
+- `collaboration start --milestone-reached`는 모든 대상의 ready와 provider 포함 여부를
+  검사하고 작업 revision/cycle을 고정합니다. 실제 통합 환경과 리비전도 기록합니다.
+- 통합 FAIL에는 원인 작업을 지정합니다. `collaboration rework`로 해당 개발 작업을 되돌리고,
+  새 검증·PR 승인 후 새로운 통합 시도를 시작합니다. 이전 실패 이력은 유지됩니다.
+- 6대 운영 영역은 순차 단계가 아니라 협업·개발에 걸친 책임 구분입니다.
+- 자세한 실행 명령, 책임 구조, 실패 처리와 버전 호환성은
+  [협업·개발 프로세스](docs/development-process.md)를 참고하세요.
 
 ## 2. 설계 결정(`PRECEDENT.md`) 작성하기
 
@@ -110,7 +112,7 @@ python3 .rail/runtime/rail.py process graph --format json
 
 ## 3. 경량 작업(`task`) 관리와 에이전트 위임
 
-8단계 전체 프로세스 대신 가볍게 작업 단위를 관리할 때는 기존 `task` 명령어를 사용합니다.
+단계형 개발 프로세스 대신 가볍게 작업 단위를 관리할 때는 기존 `task` 명령어를 사용합니다.
 
 ```bash
 # 작업 시작 (--flow는 code, contract, integrate 중 선택)
@@ -121,11 +123,11 @@ python3 .rail/runtime/rail.py task start permission-01 \
 # 에이전트에게 전달할 작업 브리핑 생성
 python3 .rail/runtime/rail.py task brief permission-01
 
-# 완료 조건 충족 여부 점검
+# 결정·flow 스냅샷과 선행 작업 점검 (테스트 완료 판정 아님)
 python3 .rail/runtime/rail.py task check permission-01
 ```
 
-* **선행 작업 연결(`--depends`)**: 먼저 끝나야 하는 작업이 있다면 `task start` 실행 시 `--depends contract-01`처럼 지정합니다. 선행 작업이 `done` 상태가 아니면 브리핑 생성과 완료 검사가 실패합니다. 예를 들어 API 계약(`contract-01`)을 먼저 완료한 뒤 Mock 기반으로 프론트/백엔드를 구현하고, 실제 연동 검증은 후속 `integrate` 작업에서 수행하도록 묶을 수 있습니다.
+* **기존 task의 선행 작업 연결(`--depends`)**: 먼저 끝나야 하는 작업이 있다면 `task start` 실행 시 `--depends contract-01`처럼 지정합니다. 선행 작업이 `done` 상태가 아니면 브리핑 생성과 완료 검사가 실패합니다. 예를 들어 API 계약(`contract-01`)을 먼저 완료한 뒤 Mock 기반으로 프론트/백엔드를 구현하고, 실제 연동은 별도로 검증합니다. 기존 code task 자체도 finish에는 integration PASS가 필요합니다. Mock 개발과 사후 통합을 나누려면 위의 v2 process/collaboration 흐름을 사용하세요.
 * **병렬 작업 규칙**: 동시에 여러 에이전트/작업자가 일할 때는 각기 다른 `task ID`와 담당 파일(`--path`)을 배정하세요. 하나의 task 상태 파일은 한 작업자만 수정해야 합니다.
 * **브리핑 전달**: `task brief` 출력 결과를 복사해 에이전트 프롬프트에 함께 넣어주세요. 작업 도중 수정할 파일이 늘어나면 `context <추가 경로>`를 실행해 해당 경로의 설계 결정을 추가로 읽어오면 됩니다.
 
@@ -178,7 +180,7 @@ python3 .rail/runtime/rail.py task finish permission-01
 * 등록한 모든 검사 항목의 최신 결과가 `PASS`여야 `task finish`가 성공합니다 (`code`/`integrate` 플로우는 `integration PASS` 필수, `contract` 플로우는 `contract PASS` 필수).
 * 만약 설계 결정 스냅샷이 중간에 바뀌었다면 이전 테스트 결과는 무효가 되므로 다시 검증해 기록해야 합니다. 소스 코드 커밋 변경을 자동으로 감시하지는 않으므로, 어떤 커밋(SHA)을 기준으로 검증했는지 `--evidence`에 함께 적어두세요.
 
-## 현재 버전(v0.2.0)의 동작 한계 및 이전 버전에서 업데이트하기
+## 현재 버전(v0.3.0)의 동작 한계 및 이전 버전에서 업데이트하기
 
 ### 알아두어야 할 한계
 
@@ -187,7 +189,13 @@ python3 .rail/runtime/rail.py task finish permission-01
 * **운영자 기록 기반**: 단계별 근거, 리뷰어, 커밋 리비전, 측정 수치는 작업자/에이전트가 기록한 값을 신뢰하며 시스템이 자동으로 진위를 검증하지는 않습니다.
 * **실제 모델 연동 실험**: 다양한 LLM 세션에서의 준수율이나 생산성 향상 수치는 아직 별도 벤치마크로 측정 전(`NOT_RUN`)입니다.
 
-### 구버전 설치 환경에서 업데이트하는 방법
+### v0.2 프로젝트의 호환성
+
+`init`은 기존 process.json과 프로젝트 문서를 보존하므로 **기존 프로젝트는 v1 8단계로
+계속 동작**합니다. 실행 중인 v1 작업에 v2 정의를 덮어쓰지 마세요. 새 v2 흐름은 새 작업공간에
+초기화해 시작하고 기존 이력은 원래 작업공간에 보존합니다. 자동 상태 마이그레이션은 없습니다.
+
+### 구버전 설치 환경에서 런타임 업데이트하기
 
 기존 프로젝트에 이전 버전의 `agentic-rail`이 설치되어 있다면, 새 버전 CLI로 `init --dry-run`을 확인한 뒤 `init`을 다시 실행하세요.
 
@@ -199,6 +207,6 @@ python3 .rail/runtime/rail.py task finish permission-01
 
 * [아키텍처·권한 경계·설계 배경](docs/architecture.md)
 * [호스트 환경 수동 검증 가이드](docs/validation.md)
-* [협업 규칙 및 8단계 개발 프로세스 모델](docs/development-process.md)
+* [협업 규칙 및 개발·사후 통합 프로세스](docs/development-process.md)
 
-*2026-11-02 업데이트 — 기존 레퍼런스 프로젝트의 소스를 복제하지 않고 핵심 관점을 결합해 독자적으로 구현한 프로젝트입니다.*
+*2026-11-03 업데이트 — 기존 레퍼런스 프로젝트의 소스를 복제하지 않고 핵심 관점을 결합해 독자적으로 구현한 프로젝트입니다.*
