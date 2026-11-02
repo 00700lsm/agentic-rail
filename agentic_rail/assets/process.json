@@ -1,13 +1,57 @@
 {
-  "version": 1,
+  "version": 2,
   "stages": [
-    {"id": "analyze", "goal": "요구사항과 영향 범위를 분석한다", "input": "담당자, 승인된 계약 참조, 소유 파일, 선행 작업", "output": "요구사항 연결, 영향 파일, 완료 기준, 차단 요인", "domains": ["governance", "knowledge", "orchestration"]},
-    {"id": "design", "goal": "구현 방안과 검증 계획을 정한다", "input": "분석 결과, 관련 결정, 공통 코드와 제공자/소비자 관계", "output": "인터페이스, 트랜잭션, 테스트 계획, 공유 코드 조율 근거", "domains": ["knowledge", "engineering", "governance"]},
-    {"id": "implement", "goal": "소유 범위 안에서 구현한다", "input": "설계, 계약, 승인 범위", "output": "변경 코드, 정확한 소스 리비전 또는 FE/BE 리비전 묶음", "domains": ["engineering", "orchestration"]},
-    {"id": "verify", "goal": "로컬 구현과 계약 준수를 검사한다", "input": "구현 리비전, 테스트 계획", "output": "현재 단계의 unit PASS 및 contract PASS, 프로젝트별 빌드/타입 검사 근거", "domains": ["engineering", "quality"]},
-    {"id": "review", "goal": "다른 검토자가 설계와 변경 내용을 검토한다", "input": "변경 diff, 요구사항, 테스트 결과", "output": "구현 담당자와 구분되는 리뷰어/세션, 검토 근거, 구현 완료 표시", "domains": ["governance", "quality"]},
-    {"id": "integrate", "goal": "선택한 통합 시점에 실제 제공자와 소비자를 검증한다", "input": "PR별 또는 마일스톤 통합 일정, 정확한 계약/FE/BE 리비전", "output": "실제 integration PASS, 통합 완료 표시; Mock은 대체 불가", "domains": ["orchestration", "quality"]},
-    {"id": "handoff", "goal": "기존 PR 및 병합 정책으로 결과를 인계한다", "input": "검토 결과, 통합 근거, 남은 위험", "output": "PR 참조와 인계 내용; 브랜치 병합 및 배포는 외부 정책에 따름", "domains": ["governance", "knowledge", "quality"]},
-    {"id": "reflect", "goal": "결함과 재작업을 측정하고 개선점을 남긴다", "input": "단계 이력과 실측 기록", "output": "현재 사이클의 결함 수, 재작업 분, 측정 근거와 개선점", "domains": ["intelligence", "knowledge"]}
+    {
+      "id": "analyze",
+      "goal": "요구사항과 영향 범위를 분석한다",
+      "input": "담당자, 승인된 계약 참조, 소유 파일, 선행 작업",
+      "output": "요구사항 연결, 영향 파일, 완료 기준, 차단 요인",
+      "domains": [
+        "governance",
+        "knowledge",
+        "orchestration"
+      ]
+    },
+    {
+      "id": "design",
+      "goal": "구현 방안과 검증 계획을 정한다",
+      "input": "분석 결과, 관련 결정, 공통 코드와 제공자/소비자 관계",
+      "output": "인터페이스, 트랜잭션, 테스트 계획, 공유 코드 조율 근거",
+      "domains": [
+        "knowledge",
+        "engineering",
+        "governance"
+      ]
+    },
+    {
+      "id": "implement",
+      "goal": "소유 범위 안에서 구현한다",
+      "input": "설계, 계약, 승인 범위",
+      "output": "변경 코드, 정확한 소스 리비전 또는 FE/BE 리비전 묶음",
+      "domains": [
+        "engineering",
+        "orchestration"
+      ]
+    },
+    {
+      "id": "verify",
+      "goal": "로컬 구현과 계약 준수를 검사한다",
+      "input": "구현 리비전, 테스트 계획",
+      "output": "현재 revision/cycle의 unit, contract, mock PASS. 실제 연동은 협업 통합에서 별도 검증",
+      "domains": [
+        "engineering",
+        "quality"
+      ]
+    },
+    {
+      "id": "review",
+      "goal": "다른 검토자가 설계와 변경 내용을 검토한다",
+      "input": "PR 참조, 승인 요청 기록, 변경 diff, Mock·단위·계약 테스트 결과",
+      "output": "다른 담당자의 PR 승인 근거를 기록한 뒤 integration-ready. 병합 및 실제 통합 완료 아님",
+      "domains": [
+        "governance",
+        "quality"
+      ]
+    }
   ]
 }

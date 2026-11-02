@@ -3,7 +3,10 @@
 For staged development, read COLLABORATION.md and start with `process start`.
 `process brief` combines the collaboration envelope, decisions, flow and current keyword stage.
 Use `process advance` after the stage output exists, and `process rework` for changes or failures.
-The eight stages are analyze/design/implement/verify/review/integrate/handoff/reflect.
+For v2: analyze/design/implement/verify/review ends in ready after a recorded PR request and approval.
+Collaboration plans own milestone timing, actual integration, rework routing and reflection.
+Use collaboration status to distinguish ready tasks from verified integration.
+Existing v1 definitions retain their original eight stages.
 Six operating domains describe responsibilities across stages, not six sequential gates.
 Legacy `task start` remains supported; its lifecycle is not silently migrated.
 

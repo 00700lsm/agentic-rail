@@ -10,7 +10,7 @@ import unittest
 from agentic_rail.cli import main
 from agentic_rail.core import approve, load_task, reconcile, start
 from agentic_rail.install import initialize
-from agentic_rail.process import STAGES, DOMAINS
+from agentic_rail.process_v1 import STAGES, DOMAINS
 
 
 class ProcessTests(unittest.TestCase):
@@ -19,6 +19,8 @@ class ProcessTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         initialize(self.root)
+        asset = Path(__file__).parents[1] / "agentic_rail/assets/process-v1.json"
+        (self.root / ".rail/process.json").write_text(asset.read_text())
 
     def cli(self, *args, ok=True):
         out, err = io.StringIO(), io.StringIO()

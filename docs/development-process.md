@@ -1,161 +1,149 @@
-# 협업 프로세스 안의 개발 하네스 — v0.2.0
+# 협업 안의 개발 흐름 — v0.3.0
 
-## 범위
+하나의 Rail에서 `process`는 개별 개발 작업, `collaboration`은 여러 작업의 통합을 관리한다.
+PoC의 기본 방향은 **계약 기반 병렬 개발 → Mock 검증 → PR 승인 요청·리뷰 → 마일스톤 사후 통합**이다.
+개발 작업의 `ready`는 통합 준비 완료이며, 협업 묶음의 `done`만 실제 통합 검증 완료를 뜻한다.
+어느 상태도 GitHub 병합 또는 배포 완료를 뜻하지 않는다.
 
-기존 협업 정책을 유지하면서 작업 내부를 키워드 단계로 실행·기록합니다.
-담당자, 소유 파일, 승인된 계약 참조, 선행 작업, 통합 시점은 작업 시작 시 정하고
-모든 brief에 전달합니다. PR 승인·병합·배포 권한은 기존 저장소 정책에 남깁니다.
-이 문서의 8개 개발 단계는 이번 구현의 기본안이며 회의에서 확정한 8단계라는 뜻이 아닙니다.
-회의 정리의 6개 항목은 단계가 아니라 전 과정에 적용하는 운영 영역입니다.
+## 책임과 시작 시점
 
-## Core에서 참고한 연결 방식
+| 범위 | 상태와 책임 |
+|---|---|
+| 개별 개발 | analyze → design → implement → verify → review → ready |
+| PR 리뷰 | not_requested → requested → approved 또는 changes_requested |
+| 협업 통합 | waiting → running → done 또는 failed; 대상 변경 시 status는 invalidated |
+| 사후 통합 시작 | 합의한 마일스톤 도달 근거 + 명시적인 시작 명령 + 모든 대상 작업 ready |
+| 재작업 | 실패한 통합의 affected 작업을 implement로 반환; 기존 검사·승인 무효화 |
 
-2026-11-02 확인한 upstream은 Core 라우팅 → flow 문서/템플릿 → 실행·검증 → 기록으로
-연결합니다. code flow의 단계는 Read → Implement → Verify → Land → Done입니다.
-역할은 explorer/worker/checker 등의 지침으로 연결하며 실행 호스트가 호출합니다.
-확인한 flow/steps 문서 자체는 LangGraph나 온톨로지 추론 엔진이 아닙니다.
-과거 upstream의 모든 버전을 조사한 것은 아니므로 이전 그래프가 삭제됐다고 단정하지 않습니다.
+Mock은 별도 `mock` 검사 종류다. verify에는 현재 cycle/revision의 unit, contract, mock PASS가
+필요하다. Mock이 필요 없는 작업도 계약 경계를 대체한 검증 방식을 근거에 명시해야 하며,
+실행하지 않은 Mock 검사를 PASS로 기록하면 안 된다. 해당 PoC 흐름이 맞지 않는 작업은
+기존 task 흐름을 사용한다. 실제 통합 검사는 개발 작업에서 기록하지 않는다.
 
-- [Core overview](https://github.com/jongsaaa/agentic-core/blob/main/flows/base/ref/overview.md)
-- [Code steps](https://github.com/jongsaaa/agentic-core/blob/main/flows/code/ref/steps.md)
-- [Role rules](https://github.com/jongsaaa/agentic-core/blob/main/agents/common.md)
-
-Rail은 소스를 복제하지 않고 단계별 입력·산출물·검증과 역할 분리를 참고했습니다.
-Core의 자동 push/배포 규칙은 가져오지 않습니다. 프로젝트의 리뷰/병합 정책이 우선합니다.
-
-## 실행 그래프
-
-`.rail/process.json`은 단계별 목적·입력·산출물·운영 영역의 정본입니다.
-`process.py`의 STAGES와 전환 검사가 허용 순서 및 게이트를 정의합니다.
-버전 1은 아래 8개 단계의 순서를 고정하며 문구와 운영 영역 매핑만 프로젝트별로
-수정할 수 있습니다. 단계 추가·재정렬은 JSON 수정만으로 허용하지 않습니다.
-정의가 바뀌면 진행 중인 작업은 새 작업으로 재계획해야 합니다.
+PR 요청과 승인 명령은 **실제로 수행한 GitHub 요청/리뷰의 근거를 기록**한다.
+GitHub 알림을 보내거나 리뷰 API를 호출하지 않는다. 요구 리뷰 수·필수 CI·계약 pin·병합 권한은
+기존 저장소 정책으로 확인한다. Rail은 비어 있지 않은 참조와 다른 리뷰어 문자열을 검사할 뿐,
+원격 계정이나 승인 진위를 인증하지 않는다.
 
 ```mermaid
 flowchart TD
-    C["협업: 담당·계약·선행 관계·통합 시점"] --> A["analyze · 분석"]
-    A --> D["design · 설계"]
-    D --> I["implement · 구현"]
-    I --> V["verify · 로컬 검증"]
-    V --> R["review · 독립 리뷰"]
-    R --> T["integrate · 실제 통합"]
-    T --> H["handoff · PR 인계"]
-    H --> F["reflect · 측정·회고"]
-    V -. 재작업 .-> I
-    R -. 재설계 .-> D
-    T -. 수정 .-> I
+  A["협업: 계약 · 담당자 · 통합 대상 · 마일스톤"] --> B
+  subgraph D["작업별 개발"]
+    B["분석 · 설계 · 구현"] --> C["단위 · 계약 · Mock 검증"]
+    C --> R["PR 승인 요청 기록"]
+    R --> Q{"리뷰 결과"}
+    Q -->|수정 요청| B
+    Q -->|승인| W["ready · 통합 대기"]
+  end
+  W --> M{"마일스톤 도달 및 대상 준비?"}
+  M -->|충족| I["협업: 실제 통합 검증"]
+  M -->|미충족| W
+  I --> O{"검증 결과"}
+  O -->|성공| F["회고 · 지표 기록 · 통합 완료"]
+  O -->|실패| X["원인 작업 지정 · 재작업"]
+  X --> B
 ```
 
-`process graph`는 동일한 단계 정의에서 Mermaid를 생성합니다.
-`process graph --format json`은 stage/domain 노드와 next/serves/rework 관계를 내보냅니다.
-Mermaid는 대표 재작업 경로만 표시하고 JSON은 허용된 전체 재작업 관계를 포함합니다.
-이는 명시적인 상태 그래프와 관계 모델이며, RDF/OWL 추론이나 자동 의미 해석은 아닙니다.
+## 실행 예시
 
-| 관계 | 저장 위치 / 의미 |
-|---|---|
-| Task → owner / paths | 책임·소유 범위. 파일 잠금이나 실제 접근 제어는 아님 |
-| Task → contract_ref | 작업이 기준으로 삼은 합의된 계약 리비전 |
-| Task → depends | 완료가 필요한 강한 선행 작업 |
-| Task → providers | 실제 통합 시에만 완료가 필요한 제공자 작업 |
-| Task → Decision | 결정 ID와 해시, 실제 승인 지시·출처·변경 범위 |
-| Task → Stage → Check | 단계·재작업 사이클·소스 리비전별 검증 기록 |
-| Stage → Domain | 해당 개발 단계가 담당하는 운영 영역 |
-| Task → PR / Metric | 인계 대상과 결함·재작업 시간 |
-
-## 여섯 운영 영역의 구현과 경계
-
-| 영역 | 이번 구현 | 외부 또는 후속 범위 |
-|---|---|---|
-| Governance | 담당자·별도 리뷰어, 승인 근거, 인계 PR 기록 | 사용자 인증, GitHub 승인 수/보호 규칙 검사 |
-| Knowledge | 계약 참조·결정·현재 단계 입력/산출물을 brief로 전달 | 외부 문서 자동 수집, 계약 버전 최신성 감시 |
-| Orchestration | 단계 전환·선행 조건·제공자 조건·재작업 경로 | 모델 호출, 작업자 스케줄러, 분산 잠금 |
-| Engineering | 분석·설계·구현의 산출물 기록 및 소스 리비전 | 설계 내용의 의미 검증, 프레임워크별 실행 어댑터 |
-| Quality | 로컬 unit/contract 및 실제 integration 기록 게이트 | 테스트 직접 실행, CI 수집, 자동 배포·복구 |
-| Intelligence | 단계별 시각·결함 수·재작업 분 기록과 합계 | 자동 계측, 생산성 인과 분석, 절차 자동 개선 |
-
-여섯 영역이 모델에 표현됐다는 것과 모든 영역이 자동화됐다는 것은 다릅니다.
-
-## 완료와 병렬 개발
-
-- `verify`: 현재 사이클·현재 리비전의 unit PASS와 contract PASS가 필요합니다.
-  프로젝트가 요구하는 build/type/lint도 수행하고 근거를 기록합니다. 해당 명령을
-  Rail이 자동 발견하지 않으므로 프로젝트별 필수 검사 전체를 보장하지 않습니다.
-- `review`: 구현 담당자와 다른 리뷰어/세션의 근거를 기록하면 implementation_complete=true.
-  Mock으로 진행한 구현은 여기까지 완료할 수 있습니다.
-- `integrate`: 제공자 작업이 완료되고 현재 단계의 integration PASS가 있어야 합니다.
-  계약/FE/BE의 정확한 리비전과 실제 실행 환경을 evidence에 기록합니다.
-  G0~G4 이름과 범위는 프로젝트 정의를 사용하고, 아직 실행하지 않은 검사는 NOT_RUN입니다.
-- `handoff`: PR 참조가 있어야 인계할 수 있습니다. GitHub 승인·병합을 수행하지 않습니다.
-- `reflect`: 현재 사이클의 실측 지표와 회고 근거가 있어야 작업이 done이 됩니다.
-  done은 병합·배포 완료를 뜻하지 않습니다.
-
-`--integration-mode per-pr`와 `milestone --batch M1` 모두 허용합니다.
-PR별/묶음별 실제 통합 실행 시점은 담당자가 결정하며 Rail은 스케줄러가 아닙니다.
-강한 `--depends`가 미완료면 단계 진행이 막힙니다. 미구현 제공자는 `--provider`로
-지정해 분석~Mock 구현을 먼저 진행할 수 있습니다. 상호 의존하는 두 작업을 서로의
-완료 조건으로 걸면 교착하므로 공통 통합 작업/실제 리비전 근거로 조율해야 합니다.
-
-## CLI 예시
-
-새 프로젝트에서는 init 후, 기존 설치에서는 새 버전의 init --dry-run → init 후 사용합니다.
-기존 사용자 flow와 CORE.md는 보존됩니다. 새 COLLABORATION.md/process.json이 추가되고
-AGENTS.md의 관리 블록이 새 진입점을 안내합니다. 기존 task는 자동 전환하지 않습니다.
+초기화된 프로젝트 루트에서 실행한다. 아래 `rail` 함수는 복사 런타임을 부른다.
+`<...>`는 실제 확인한 참조로 바꾼다. 명령은 기록을 관리하며 테스트 자체를 실행하지 않는다.
 
 ```bash
-python3 .rail/runtime/rail.py process start permission-02 \
-  --goal '권한 조회 API 구현' --owner permission-worker \
-  --path backend/permission.py --path frontend/permission.ts \
-  --contract-ref 'contract@<accepted-commit>' \
+rail() { python3 .rail/runtime/rail.py "$@"; }
+rail process start permission --goal '권한 조회' --owner permission-dev \
+  --path backend/permission.py --contract-ref 'contract@<sha>' \
+  --integration-mode milestone --batch M1 --provider auth
+rail process start auth --goal '인증 제공' --owner auth-dev \
+  --path backend/auth.py --contract-ref 'contract@<sha>' \
   --integration-mode milestone --batch M1
-python3 .rail/runtime/rail.py process brief permission-02
-python3 .rail/runtime/rail.py process advance permission-02 --stage analyze \
-  --actor permission-worker --evidence 'docs/permission-analysis.md: 영향 범위와 완료 기준'
-python3 .rail/runtime/rail.py process advance permission-02 --stage design \
-  --actor permission-worker --evidence 'docs/permission-design.md: 인터페이스·검증 계획'
-python3 .rail/runtime/rail.py process advance permission-02 --stage implement \
-  --actor permission-worker --revision 'backend@<sha>;frontend@<sha>' \
-  --evidence '구현 diff와 소유 파일 확인'
+
+# 개발 시작 때부터 협업 담당자가 대상과 시작 조건을 명시한다.
+rail collaboration create M1 --task auth --task permission --batch M1 \
+  --check G3-G4 --owner coordinator --trigger 'Auth·Permission 리뷰 완료 후 M1 연동 점검'
+rail process brief permission
+rail process advance permission --stage analyze --actor permission-dev --evidence '<분석 산출물>'
+rail process advance permission --stage design --actor permission-dev --evidence '<설계 산출물>'
+rail process advance permission --stage implement --actor permission-dev \
+  --revision 'backend@<sha>' --evidence '<변경 diff>'
+rail task record-check permission --name unit --kind unit --result PASS --evidence '<단위 테스트 로그>'
+rail task record-check permission --name contract --kind contract --result PASS --evidence '<계약 테스트 로그>'
+rail task record-check permission --name mock --kind mock --result PASS --evidence '<Mock 테스트 로그>'
+rail process advance permission --stage verify --actor permission-dev --evidence '<검증 요약>'
+
+# 실제 GitHub에서 요청한 다음 해당 근거를 기록한다.
+rail process request-review permission --pr '<PR URL>' --actor permission-dev --evidence '<승인 요청 근거>'
+rail process review-result permission --result approve --actor reviewer --evidence '<GitHub 리뷰 URL>'
+rail process advance permission --stage review --actor permission-dev --evidence '<승인 확인>'
+# 수정 요청이면 --result request-changes 기록 후 process rework로 되돌린다.
+
+# auth도 동일한 개발·검증·PR 리뷰를 마쳐 ready가 되어야 한다.
+rail collaboration status M1
+# 준비만 됐다고 자동 시작하지 않는다. 합의된 시점 도달도 명시한다.
+rail collaboration start M1 --actor coordinator --milestone-reached \
+  --evidence '<마일스톤 도달 확인>' --revision 'backend@<sha>,frontend@<sha>,contract@<sha>' \
+  --environment '<실제 서비스 통합 환경>'
+# 실제 서비스를 연동하여 테스트한 뒤 기록한다. Mock 결과는 사용할 수 없다.
+rail collaboration record-check M1 --name G3-G4 --result PASS --actor tester --evidence '<실제 연동 로그>'
+rail collaboration finish M1 --actor coordinator --defects 0 --rework-minutes 0 --evidence '<회고와 측정 근거>'
 ```
 
-실제 로컬 검사를 실행한 뒤에만 결과를 기록합니다. 아래 evidence는 실제 명령과 로그로
-대체해야 합니다. Rail은 evidence 문자열을 실행하지 않습니다.
+`collaboration create --check`로 필수 실제 통합 검사 이름을 미리 선언한다. 여러 개면 옵션을
+반복한다. 선언한 검사가 모두 PASS이고 추가로 기록한 검사도 모두 PASS여야 완료할 수 있다.
+
+통합 전에 변경을 임시 통합 브랜치/환경에 취합할 수 있다. 승인된 PR을 먼저 통합 브랜치에
+병합할지, 마일스톤에 한꺼번에 병합할지는 기존 협업 정책에 따른다. 위 명령은 병합 순서를
+강제하거나 자동 병합하지 않는다. **사후처리의 기준은 실제 통합 검증 시점**이다.
+
+## 통합 실패 및 소스 변경
 
 ```bash
-python3 .rail/runtime/rail.py task record-check permission-02 --name unit \
-  --kind unit --result PASS --evidence '<실제 실행 명령·로그·대상 리비전>'
-python3 .rail/runtime/rail.py task record-check permission-02 --name contract \
-  --kind contract --result PASS --evidence '<실제 계약 검증 명령·로그>'
-python3 .rail/runtime/rail.py process advance permission-02 --stage verify \
-  --actor permission-worker --evidence '<로컬 검사 결과 요약>'
-python3 .rail/runtime/rail.py process advance permission-02 --stage review \
-  --actor independent-reviewer --evidence '<독립 검토 기록>'
-python3 .rail/runtime/rail.py process status permission-02
+# running 상태에서 실패를 기록하면 해당 시도는 failed가 된다.
+rail collaboration record-check M1 --name G3-G4 --result FAIL --actor tester \
+  --affected permission --evidence '<실패 로그와 원인>'
+rail collaboration rework M1 --task permission --actor coordinator --evidence '<수정 범위>'
 ```
 
-이 시점은 구현 완료·통합 대기입니다. 실제 통합을 수행한 다음:
+대상 작업의 cycle이 증가하고 revision·검사·PR 승인이 재사용되지 않는다. 구현부터 다시
+검증하고 PR 승인 요청·승인을 기록해 ready가 된 후 `collaboration start`로 다음 통합 시도를
+시작한다. 여러 원인 작업이면 `--affected`를 반복하고 각 작업을 재작업한다.
+기존 시도의 실패 근거는 보존한다. 미실행은 NOT_RUN으로 기록하며 완료를 막는다.
 
-```bash
-python3 .rail/runtime/rail.py task record-check permission-02 --name live \
-  --kind integration --result PASS --evidence '<실제 FE/BE 실행·리비전·로그>'
-python3 .rail/runtime/rail.py process advance permission-02 --stage integrate \
-  --actor integration-reviewer --evidence '<통합 결과>'
-python3 .rail/runtime/rail.py process advance permission-02 --stage handoff \
-  --actor permission-worker --pr '<PR URL>' --evidence '<리뷰 요청·남은 위험>'
-python3 .rail/runtime/rail.py process metric permission-02 \
-  --defects 0 --rework-minutes 0 --evidence '<실측 기록; 예시 수치를 그대로 쓰지 않음>'
-python3 .rail/runtime/rail.py process advance permission-02 --stage reflect \
-  --actor permission-worker --evidence '<개선점과 측정 해석>'
-```
+통합 실패 외의 소스 변경도 **반드시** `process rework`로 기록해야 한다. Rail은 Git 작업 트리를
+감시하지 않는다. 기록된 작업 revision/cycle/계약/검증/승인/결정이 바뀌면 기존 통합 스냅샷은
+무효이며, 완료했던 묶음도 status에서 invalidated로 표시한다. 다시 준비한 뒤 새 시도가 필요하다.
 
-실패나 소스 수정이 있으면 `process rework <id> --to implement --actor <name> --reason <reason>`
-으로 돌아갑니다. 이전 검사·리뷰·통합 완료 표시는 새 사이클에 재사용하지 않습니다.
-설계 변경이면 design 또는 analyze로 돌아갑니다. 결정 변경은 기존 approve/reconcile 후
-rework가 필요합니다. 이미 done인 작업은 수정하지 말고 후속 작업을 만듭니다.
+## 의존성과 운영 영역
 
-## 검증 한계
+`--depends`는 완료(done)가 필요한 선행 작업이다. 계약 확정 같은 선행 작업에 사용한다.
+병렬 개발 중 실제 연동 상대는 `--provider`로 연결한다. provider는 나중에 생성할 수 있고,
+서로 provider여도 각자의 Mock 개발을 막지 않는다. 통합 시작 때는 모든 provider를 같은 묶음에
+포함하고 ready인지 검사한다. 서로를 hard depends로 지정하면 병렬 진행할 수 없다.
 
-상태 전환은 CLI로 검사하지만 로컬 JSON을 직접 쓰는 작업자를 보안적으로 막지 않습니다.
-source revision, actor, contract ref, evidence는 운영자 기록입니다. 소스 변경이나 리뷰
-신원을 자동 인증하지 않습니다. 모델 호출·테스트 실행·필요한 시점의 brief 전달은 호스트
-책임입니다. 훅·실시간 문맥 주입은 재도입하지 않습니다. 실제 모델 세션 검증은 NOT_RUN입니다.
-이 범위는 하네스의 상태 관리 기반이며 완성된 자율 실행 엔진이라고 주장하지 않습니다.
+| 운영 영역 | 담당하는 과정 |
+|---|---|
+| Governance | 담당자·계약 기준, PR 승인 근거, 통합 담당자 |
+| Knowledge | 계약·설계·검증 근거·회고 |
+| Orchestration | 작업 배정 정보, provider 관계, 묶음·마일스톤·재작업 대상 |
+| Engineering | 개별 분석·설계·구현·Mock 검증 |
+| Quality | 단위·계약 검증, PR 리뷰, 실제 통합 검증 |
+| Intelligence | 통합 시도 이력, 결함·재작업 시간과 회고 |
+
+6개 영역은 순차 실행 단계가 아니다. process.json은 개발 단계별 영역을, graph JSON은
+협업 통합·회고까지 포함한 관계를 표현한다. 그래프 추론 실행 엔진은 아니다.
+
+## 호환성과 한계
+
+- 새 설치는 process 정의 v2. 기존 설치의 v1 process.json은 init으로 덮어쓰지 않는다.
+  기존 v1 작업은 종전 8단계로 계속 동작한다. [v1 사용법](development-process-v1.md).
+- 기존 진행 중인 작업의 정의를 v2로 교체하지 말 것. v2는 새 프로젝트/worktree에서 초기화해
+  시작한다. v1 이력은 원래 작업공간에 보존한다. 자동 데이터 마이그레이션은 제공하지 않는다.
+- v2에는 개발 작업별 integrate/handoff/reflect가 없다. PR 인계는 review에,
+  통합·회고는 collaboration으로 이동했다. 기존 task 흐름은 그대로 지원한다.
+- 하나의 협업 workspace에서 작업 상태를 관리한다. 파일은 로컬에 저장되며 여러 저장소나
+  머신 사이를 자동 동기화하지 않는다. 각 저장소 revision과 외부 결과는 담당자가 기록한다.
+- 작업/묶음별 단일 작성자가 필요하다. 분산 락·동시 쓰기 병합·자동 스케줄러가 없다.
+- 실제 테스트 실행·GitHub 요청/승인/CI 조회·병합은 외부에서 수행한다. 기록한 참조의 진위는
+  검증하지 않는다. 운영 상태와 결과를 정직하게 남기는 CLI이며 보안 경계가 아니다.
+- per-pr도 지원한다. 작업과 묶음에 동일한 mode/batch를 지정하고 해당 PR의 통합 시작 근거를
+  기록한다. 마일스톤 플래그만 생략하며 실제 통합 PASS 조건은 동일하다.

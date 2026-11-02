@@ -6,7 +6,7 @@ from . import __version__
 from .core import (RailError, approve, brief, check_task, context, decisions, load_task,
                    reconcile, start, task_path, timestamp, write_json)
 from .install import initialize
-from . import process
+from . import process, collaboration
 
 
 def parser():
@@ -22,6 +22,7 @@ def parser():
     c.add_argument('--budget', type=int, default=8000, help='UTF-8 byte limit; never silently truncates')
     sub.add_parser('audit')
     process.register(sub)
+    collaboration.register(sub)
     task = sub.add_parser('task').add_subparsers(dest='action', required=True)
     s = task.add_parser('start')
     s.add_argument('id')
@@ -38,7 +39,7 @@ def parser():
     record = task.add_parser('record-check')
     record.add_argument('id')
     record.add_argument('--name', required=True)
-    record.add_argument('--kind', choices=['unit', 'contract', 'integration', 'other'], required=True)
+    record.add_argument('--kind', choices=['unit', 'contract', 'mock', 'integration', 'other'], required=True)
     record.add_argument('--result', choices=['PASS', 'FAIL', 'NOT_RUN'], required=True)
     record.add_argument('--evidence', required=True)
     return p
@@ -54,6 +55,8 @@ def run(args):
     if args.command == 'audit':
         records = decisions(root)
         return {'status': 'PASS', 'decisions': len(records), 'active': sum(d.status == 'active' for d in records)}, 0
+    if args.command == 'collaboration':
+        return collaboration.run(root, args), 0
     if args.command == 'process':
         return process.run(root, args), 0
     action = args.action
@@ -69,12 +72,14 @@ def run(args):
     if 'process' in task:
         process.validate(root, task)
         if action == 'finish':
-            raise RailError('Process tasks finish through process advance --stage reflect; task finish cannot bypass stages')
+            raise RailError('Process tasks use their versioned lifecycle; task finish cannot bypass stages')
     if action == 'record-check':
         if task['state'] == 'done':
             raise RailError('Completed tasks are immutable')
         if 'process' in task and task['process']['stage'] not in ('verify', 'integrate'):
             raise RailError('Process checks belong to verify/integrate; rework before rerunning completed stages')
+        if task.get('process', {}).get('version') == 2 and (task['process']['stage'] != 'verify' or args.kind == 'integration'):
+            raise RailError('v2 development records unit/contract/mock at verify; live tests belong to collaboration')
         if not args.name.strip() or not args.evidence.strip():
             raise RailError('Check name and evidence must not be empty')
         task['checks'].append(dict(name=args.name, kind=args.kind, result=args.result,

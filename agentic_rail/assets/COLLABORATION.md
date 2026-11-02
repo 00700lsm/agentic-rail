@@ -1,33 +1,32 @@
-# Collaboration policy boundary
+# Collaboration policy — one Rail, nested development
 
-The existing project's collaboration process remains authoritative. Rail records and
-checks local task transitions; it does not change repository permissions or merge policy.
+The project's contract acceptance, ownership, required CI/reviews, merge owner and target
+branch policy remain authoritative. Rail records evidence; it does not authenticate it.
 
-1. Assign an owner and explicit owned files. Agree ownership before shared code changes.
-   Use different task IDs and worktrees for parallel writers; no distributed lock is provided.
-2. Contract-first: identify the accepted contract commit/reference before development.
-   Coordinate contract changes with providers/consumers and update decisions through the
-   existing approval process. A nonempty contract reference is not remote acceptance proof.
-3. `--depends` means a hard, completed prerequisite. `--provider` means an existing task whose
-   completion is required only at integration; implementation may use agreed-contract mocks.
-   Do not make mutually dependent integration tasks providers of each other. Shared integration
-   can use exact external revisions recorded in evidence instead.
-4. Choose `--integration-mode per-pr` or `milestone --batch <name>` explicitly. Both support
-   parallel development. Timing is recorded, not scheduled automatically. Temporary integration
-   is different from merging a protected branch.
-5. Preserve the project's required CI, review count, target branch, contract pin validation,
-   merge owner and communication policy. Review in Rail never substitutes for GitHub approval.
-   Human/agent reviewers must be separate from the implementation owner; their identities
-   are recorded strings, not authenticated permissions.
-6. Use the development keywords from process.json. At review completion, implementation may
-   be ready while live integration remains pending. The task becomes done only after integration,
-   PR handoff and reflection. Done does not mean merged or deployed.
-7. Source changes after implementation require `process rework`; use new revision evidence and
-   rerun affected checks. After decision approval/reconcile, rework invalidates earlier stages.
-8. Record defects, discovery stages and rework time from actual observations. Metrics do not
-   establish productivity improvement without a comparison baseline.
-9. Commit subject format: `vX.Y.Z <change summary>`. Use the project's actual release version;
-   do not copy Rail's version into unrelated projects. Existing repository rules still apply.
+1. Agree contract, owners and owned files. Shared code changes need coordination. Use separate
+   tasks/worktrees for writers. One writer per task/plan; no distributed locks or cross-machine sync.
+2. For process definition v2, each task runs analyze/design/implement/verify/review then ready.
+   Record unit, contract and mock PASS for the current cycle/revision. Mock PASS is not live PASS.
+3. Request PR approval in GitHub, then record request-review with PR and evidence. Record the
+   actual approval or request-changes using review-result. A different actor string is required
+   for approval; it is not identity verification or a replacement for required repository reviews.
+4. The PoC uses milestone post-integration: create a collaboration plan with members, batch,
+   coordinator and agreed trigger. Start only when all members are ready AND the milestone is
+   explicitly reached. Readiness alone does not trigger integration. per-pr is also supported.
+5. --depends requires a done predecessor (e.g. accepted contract work). --provider allows Mock
+   development before the provider is ready. Include all providers in the collaboration plan;
+   every included task must be ready. Mutual providers are possible without mutual hard depends.
+6. The coordinator gathers exact source revisions in an actual integration environment. Record
+   real integration checks with collaboration record-check; NOT_RUN cannot complete a plan.
+   Branch collection and PR merge timing follow existing policy; Rail does not merge anything.
+7. On FAIL identify affected tasks and evidence. collaboration rework returns each affected task
+   to implementation. Re-run checks and request/record fresh approval, then start a new attempt.
+   All source changes require process rework, including after a previous integration succeeded.
+8. Finish collaboration after live PASS and reflection metrics. Keep failed attempt history.
+   ready means development ready; collaboration done means integration verified, not merged/deployed.
+9. Version 1 process definitions retain the old eight-stage lifecycle; do not silently replace
+   an active project's process.json. New v2 work belongs in a fresh initialized workspace.
+10. Commit subjects start with the actual project release version: vX.Y.Z <summary>.
 
-Six operating domains (not sequential stages): Governance, Knowledge, Orchestration,
-Engineering, Quality, Intelligence. Each stage lists the domains it serves.
+Six operating domains: Governance, Knowledge, Orchestration, Engineering, Quality, Intelligence.
+They span both collaboration and development; they are not six sequential steps.
