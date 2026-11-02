@@ -5,7 +5,6 @@ from pathlib import Path
 from . import __version__
 from .core import (RailError, approve, brief, check_task, context, decisions, load_task,
                    reconcile, start, task_path, timestamp, write_json)
-from .hooks import handle
 from .install import initialize
 
 
@@ -15,13 +14,12 @@ def parser():
     p.add_argument('--version', action='version', version=__version__)
     sub = p.add_subparsers(dest='command', required=True)
     init = sub.add_parser('init')
-    init.add_argument('--claude', action='store_true')
+    init.add_argument('--claude', action='store_true', help='Also write CLAUDE.md; no hooks')
     init.add_argument('--dry-run', action='store_true')
     c = sub.add_parser('context')
     c.add_argument('paths', nargs='+')
     c.add_argument('--budget', type=int, default=8000, help='UTF-8 byte limit; never silently truncates')
     sub.add_parser('audit')
-    sub.add_parser('hook', help='Read a Claude Code hook event from stdin')
     task = sub.add_parser('task').add_subparsers(dest='action', required=True)
     s = task.add_parser('start')
     s.add_argument('id')
@@ -54,14 +52,6 @@ def run(args):
     if args.command == 'audit':
         records = decisions(root)
         return {'status': 'PASS', 'decisions': len(records), 'active': sum(d.status == 'active' for d in records)}, 0
-    if args.command == 'hook':
-        raw = sys.stdin.read(1000001)
-        if len(raw) > 1000000:
-            raise RailError('Hook input too large')
-        event = json.loads(raw)
-        if not isinstance(event, dict):
-            raise RailError('Hook input must be an object')
-        return handle(root, event), 0
     action = args.action
     if action == 'start':
         return start(root, args.id, args.goal, args.flow, args.path, args.depends), 0
@@ -110,5 +100,5 @@ def main(argv=None):
         return code
     except (RailError, OSError, ValueError, KeyError, TypeError) as exc:
         print(f'agentic-rail: {exc}', file=sys.stderr)
-        # Claude PreToolUse interprets exit 2 as a blocking failure. Other commands also fail visibly.
+        # Report invalid input or runtime failures visibly.
         return 2

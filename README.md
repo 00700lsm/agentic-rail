@@ -2,8 +2,8 @@
 
 **작업은 flow로 진행하고, 설계는 해당 파일의 결정에 근거하며, 위임할 때 승인 범위를 보존합니다.**
 
-agentic-core의 작업 흐름·기록 방식과 Context-Rail의 결정 본문 주입·변경 권한 관점을
-결합한 독립 구현 MVP입니다. 기존 두 프로젝트를 그대로 합친 포크는 아닙니다.
+agentic-core의 작업 흐름·기록 방식과 설계 결정·변경 근거 전달 관점을
+결합한 독립 구현 MVP입니다. 결정은 작업 시작과 위임 시 명시적으로 전달합니다. 기존 두 프로젝트를 그대로 합친 포크는 아닙니다.
 Python 3.10 이상, 런타임 외부 패키지 없음. 현재 버전: **0.1.0**.
 
 ## 무엇을 하는가
@@ -16,8 +16,8 @@ Python 3.10 이상, 런타임 외부 패키지 없음. 현재 버전: **0.1.0**.
 | 결정 변경 근거 유지 | 작업·결정 ID·내용 해시·실제 사용자 지시·출처·변경 범위 기록 |
 | 위임 | 목표·소유 파일·선행 작업·flow·결정·승인 근거가 포함된 brief 생성 |
 | 검증 상태 | PASS / FAIL / NOT_RUN 구분, 실제 연동 없는 code 완료 방지 |
-| Claude Code | 읽기 후 문맥 주입 + 문맥을 받지 못한 첫 편집 보류 |
-| Codex 및 기타 호스트 | AGENTS.md와 명시적 CLI. 네이티브 훅 지원을 주장하지 않음 |
+| 모든 호스트 | 명시적 CLI로 brief/context 생성. 모델 호출과 전달은 실행 환경이 담당 |
+| Claude Code 안내 | 선택적으로 CLAUDE.md 생성. 훅 등록 없음 |
 
 ## 빠른 시작
 
@@ -28,13 +28,12 @@ python3 -m agentic_rail --version
 python3 -m unittest discover -s tests -v
 
 # 실제 작업할 프로젝트에 적용할 변경을 먼저 확인
-python3 -m agentic_rail --root /path/to/project init --claude --dry-run
-python3 -m agentic_rail --root /path/to/project init --claude
+python3 -m agentic_rail --root /path/to/project init --dry-run
+python3 -m agentic_rail --root /path/to/project init
 ```
 
-Codex에서만 사용할 때는 `--claude`를 생략합니다. Python 실행 파일이 `python`인 환경은
-명령을 바꾸고, Claude 설정에 생성된 훅의 `python3`도 해당 실행 파일로 변경하세요.
-자동 생성 훅 명령은 POSIX 셸/Git Bash 기준입니다. PowerShell 네이티브 훅은 검증하지 않았습니다.
+Claude Code용 안내 문서도 필요하면 `init --claude`를 사용합니다.
+이 옵션은 CLAUDE.md만 추가하며 훅을 설치하지 않습니다.
 원하면 `python3 -m pip install -e .`로 `agentic-rail` 명령을 설치할 수도 있습니다.
 
 init은 프로젝트 안에만 기록합니다. 전역 설정·원격 저장소·기존 프로젝트 소스는 변경하지
@@ -70,7 +69,7 @@ python3 .rail/runtime/rail.py context src/user.py
 각 `### ID 제목`이 하나의 결정입니다. 다섯 필드는 필수이고 ID는 프로젝트 전체에서
 유일합니다. `Scope`는 해당 PRECEDENT.md 폴더 기준의 쉼표 구분 패턴입니다.
 Python fnmatch 규칙으로 `*`는 `/`를 포함하므로 `backend/*`는 그 아래 전체에 적용됩니다.
-경로 밖으로 나가는 패턴은 금지합니다. `retired` 결정은 기록만 남고 주입하지 않습니다.
+경로 밖으로 나가는 패턴은 금지합니다. `retired` 결정은 기록만 남고 brief/context에 포함하지 않습니다.
 [사용자 관리 예시](examples/user-management/PRECEDENT.md)는 실제 저장소 계약을 확정한 내용이 아닙니다.
 
 ## 작업과 위임
@@ -88,6 +87,10 @@ python3 .rail/runtime/rail.py task check permission-01
 아니면 brief와 완료 검사가 실패합니다. Mock 기반 구현을 먼저 진행할 경우 완료된 계약
 작업을 선행 조건으로 두고, 아직 없는 실제 제공자는 후속 integrate 작업에서 검증합니다.
 각 병렬 작업에는 다른 task ID와 소유 파일을 부여하세요. 동일 task 파일은 한 작업자만 씁니다.
+
+`task brief` 출력은 작업 시작 때 읽고, 다른 모델에 위임할 때 작업 프롬프트와 함께
+전달합니다. Rail이 모델을 직접 호출하지는 않습니다. 작업 범위가 넓어지면
+`context <추가 경로>`로 관련 결정을 다시 읽으세요.
 
 ## 충돌과 승인
 
@@ -138,22 +141,26 @@ python3 .rail/runtime/rail.py task finish permission-01
 contract는 contract PASS가 필요합니다. 결정 snapshot 변경 전의 검사 결과는 재실행해야
 합니다. 소스 커밋의 변경까지 자동 감시하지는 않으므로 실제 검사 대상 SHA도 근거에 적으세요.
 
-## Claude 동작과 한계
+## 전달 방식과 한계
 
-- Read 및 리터럴 파일 경로를 포함한 Bash 결과에서 결정 **본문**을 주입합니다.
-- 실패한 Bash도 PostToolUseFailure로 처리합니다. 셸을 실행하거나 전체 의미를 추론하지 않습니다.
-- 현재 결정 문맥을 받지 않은 Edit/Write/MultiEdit는 한 번 보류하고 내용을 전달합니다.
-  AI는 검토 후 다시 시도합니다. 정상 변경에 매번 사용자 승인을 요구하지 않습니다.
-- 세션·에이전트·문맥 해시별 전달 기록을 구분합니다. 결정이 바뀌면 다시 전달합니다.
-- 8,000바이트 초과 문맥을 조용히 자르지 않습니다. 결정/범위를 나눠야 합니다.
-- 임의 스크립트, 셸 쓰기, 변수·glob·cd 조합 등은 완전히 통제하지 못합니다.
-  이런 경로는 `context`로 직접 읽고 프로젝트 검증/리뷰를 함께 사용하세요.
-- 훅 payload/CLI는 자동 테스트했지만 **실제 Claude/Codex 세션 연동은 NOT_RUN**입니다.
-  LLM 준수율·비용 절감·생산성 향상을 입증한 버전은 아닙니다.
+- 파일 접근 감지, 실시간 결정 주입, 첫 편집 차단 기능은 제거했습니다.
+- PRECEDENT.md의 결정 기록, 경로별 context, 작업 brief와 승인 근거 전달은 유지합니다.
+- 작업 중 규칙을 자동으로 다시 보여주거나 모델의 준수를 강제하지 않습니다.
+- context의 기본 8,000바이트 제한을 넘으면 오류로 알리며 조용히 자르지 않습니다.
+- 실제 모델 세션 연동은 NOT_RUN입니다. 모델별 준수율이나 생산성 개선을 입증하지 않았습니다.
+
+### 기존 설치에서 전환
+
+업데이트한 저장소의 CLI로 대상 프로젝트에 `init --dry-run`을 실행한 뒤 `init`을 실행합니다.
+기존 Rail이 등록한 정확한 훅 명령만 제거하고, 다른 훅과 설정은 보존합니다.
+복사된 이전 hooks.py는 백업 후 제거하며, 기존 CLAUDE.md의 Rail 관리 블록도 갱신합니다.
+직접 수정한 훅 명령은 자동 식별하지 않으므로 수동으로 제거해야 합니다.
+기존 `.rail/state/receipts/` 기록은 더 이상 사용하지 않습니다.
+실행 중인 호스트 세션은 종료 후 다시 시작해 변경된 설정을 읽게 하세요.
 
 ## 문서
 
 - [구조·권한 경계·원문 출처](docs/architecture.md)
 - [호스트 수동 검증 절차](docs/validation.md)
 
-2026-10-29 작성. upstream 프로젝트의 소스 복제 없이 관점을 결합한 초기 구현입니다.
+2026-11-02 갱신. upstream 프로젝트의 소스 복제 없이 관점을 결합한 초기 구현입니다.
