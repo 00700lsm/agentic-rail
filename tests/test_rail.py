@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from agentic_rail.core import (RailError, approve, brief, check_task, context, decisions,
                                load_task, reconcile, select, start, task_path, write_json)
-from agentic_rail.hooks import handle
 from agentic_rail.install import initialize
 from agentic_rail.cli import main
 
@@ -27,10 +26,6 @@ class RailTests(unittest.TestCase):
         (self.root / 'src').mkdir()
         (self.root / 'src/a.py').write_text('pass\n')
         (self.root / 'PRECEDENT.md').write_text(record(), encoding='utf-8')
-
-    def event(self, name='PostToolUse', tool='Read', agent='one', **kwargs):
-        return dict(hook_event_name=name, tool_name=tool, session_id='session', agent_id=agent,
-                    tool_input=kwargs or {'file_path': str(self.root / 'src/a.py')})
 
     def init(self):
         initialize(self.root)
@@ -91,40 +86,6 @@ class RailTests(unittest.TestCase):
         (self.root / 'PRECEDENT.md').write_text(record() + '\n```md\n### Fake heading\n```\n')
         self.assertEqual(len(decisions(self.root)), 1)
 
-    def test_first_edit_denied_then_retry_without_allow(self):
-        event = self.event('PreToolUse', 'Edit')
-        first = handle(self.root, event)['hookSpecificOutput']
-        second = handle(self.root, event)['hookSpecificOutput']
-        self.assertEqual(first['permissionDecision'], 'deny')
-        self.assertNotIn('permissionDecision', second)
-
-    def test_read_receipt_and_agent_isolation(self):
-        handle(self.root, self.event())
-        self.assertNotIn('permissionDecision', handle(self.root, self.event('PreToolUse', 'Write'))['hookSpecificOutput'])
-        self.assertEqual(handle(self.root, self.event('PreToolUse', 'Write', 'two'))['hookSpecificOutput']['permissionDecision'], 'deny')
-
-    def test_decision_revision_invalidates_receipt(self):
-        handle(self.root, self.event())
-        (self.root / 'PRECEDENT.md').write_text(record(decision='A new response shape.'))
-        self.assertEqual(handle(self.root, self.event('PreToolUse', 'Edit'))['hookSpecificOutput']['permissionDecision'], 'deny')
-
-    def test_compaction_reinjects_body(self):
-        one = handle(self.root, self.event())
-        self.assertEqual(handle(self.root, self.event()), one)
-
-    def test_failed_shell_read_context(self):
-        event = self.event('PostToolUseFailure', 'Bash', command=f'cat "{self.root}/src/a.py" && false')
-        self.assertIn('DEC-001', handle(self.root, event)['hookSpecificOutput']['additionalContext'])
-
-    def test_shell_not_executed(self):
-        event = self.event(tool='Bash', command='touch SENTINEL; cat src/a.py')
-        handle(self.root, event)
-        self.assertFalse((self.root / 'SENTINEL').exists())
-
-    def test_invalid_context_blocks_edit(self):
-        (self.root / 'PRECEDENT.md').write_text('invalid')
-        self.assertEqual(handle(self.root, self.event('PreToolUse', 'Edit'))['hookSpecificOutput']['permissionDecision'], 'deny')
-
     def test_dry_run_writes_nothing(self):
         result = initialize(self.root, claude=True, dry_run=True)
         self.assertTrue(result['changed'])
@@ -142,6 +103,54 @@ class RailTests(unittest.TestCase):
         self.assertIn(custom, settings['hooks']['PostToolUse'])
         self.assertEqual(settings['env'], {'CUSTOM': 'yes'})
         self.assertTrue((self.root / 'AGENTS.md').read_text().startswith('My project rules'))
+
+    def test_fresh_init_has_no_hooks_or_state(self):
+        initialize(self.root, claude=True)
+        self.assertTrue((self.root / 'CLAUDE.md').exists())
+        self.assertFalse((self.root / '.claude/settings.json').exists())
+        self.assertFalse((self.root / '.rail/state').exists())
+        self.assertFalse((self.root / '.rail/runtime/agentic_rail/hooks.py').exists())
+
+    def test_legacy_migration_preserves_mixed_hooks_and_dry_run(self):
+        from agentic_rail.install import BEGIN, END
+        command = 'python3 "$CLAUDE_PROJECT_DIR/.rail/runtime/rail.py" --root "$CLAUDE_PROJECT_DIR" hook'
+        own = {'type': 'command', 'command': command}
+        other = {'type': 'command', 'command': 'echo custom'}
+        config = {'env': {'KEEP': 'yes'}, 'hooks': {
+            name: [{'matcher': matcher, 'hooks': [own, other]},
+                   {'matcher': matcher, 'hooks': [own]}]
+            for name, matcher in [('PreToolUse', 'Edit|Write|MultiEdit'),
+                                  ('PostToolUse', 'Read|Bash'), ('PostToolUseFailure', 'Bash')]}}
+        config['hooks']['SessionStart'] = [{'hooks': [other]}]
+        settings = self.root / '.claude/settings.json'
+        settings.parent.mkdir()
+        original = json.dumps(config)
+        settings.write_text(original)
+        stale = self.root / '.rail/runtime/agentic_rail/hooks.py'
+        stale.parent.mkdir(parents=True)
+        stale.write_text('# old hook runtime')
+        claude = self.root / 'CLAUDE.md'
+        claude.write_text('Keep before\n' + BEGIN + '\nold hook guidance\n' + END + '\nKeep after\n')
+        result = initialize(self.root, dry_run=True)
+        self.assertIn('.claude/settings.json', result['changed'])
+        self.assertIn('.rail/runtime/agentic_rail/hooks.py', result['deleted'])
+        self.assertEqual(settings.read_text(), original)
+        self.assertTrue(stale.exists())
+        initialize(self.root)
+        updated = json.loads(settings.read_text())
+        self.assertEqual(updated['env'], config['env'])
+        self.assertEqual(updated['hooks']['SessionStart'], config['hooks']['SessionStart'])
+        for name in ('PreToolUse', 'PostToolUse', 'PostToolUseFailure'):
+            self.assertEqual(updated['hooks'][name],
+                             [dict(config['hooks'][name][0], hooks=[other])])
+        self.assertFalse(stale.exists())
+        self.assertEqual(stale.with_name('hooks.py.agentic-rail.bak').read_text(), '# old hook runtime')
+        self.assertEqual(settings.with_name('settings.json.agentic-rail.bak').read_text(), original)
+        self.assertTrue(claude.read_text().startswith('Keep before'))
+        self.assertTrue(claude.read_text().endswith('Keep after\n'))
+        self.assertNotIn('old hook guidance', claude.read_text())
+        self.assertIn('task brief', claude.read_text())
+        self.assertEqual(initialize(self.root), {'dry_run': False, 'changed': [], 'deleted': []})
 
     def test_init_preserves_custom_flow(self):
         self.init()
@@ -230,11 +239,6 @@ class RailTests(unittest.TestCase):
         self.cli('task', 'record-check', 'one', '--name', 'mock', '--kind', 'unit', '--result', 'PASS', '--evidence', 'mock results')
         self.assertEqual(self.cli('task', 'finish', 'one')[0], 1)
 
-    def test_relative_read_uses_event_cwd(self):
-        event = self.event(file_path='a.py')
-        event['cwd'] = str(self.root / 'src')
-        self.assertIn('DEC-001', handle(self.root, event)['hookSpecificOutput']['additionalContext'])
-
     def test_checks_invalid_after_reconcile(self):
         self.init()
         self.task()
@@ -262,8 +266,8 @@ class RailTests(unittest.TestCase):
         run('audit')
         run('task', 'start', 'live', '--flow', 'code', '--goal', 'CLI smoke', '--path', 'src/a.py')
         self.assertIn('DEC-001', run('task', 'brief', 'live'))
-        result = json.loads(run('hook', data=json.dumps(self.event())))
-        self.assertEqual(result['hookSpecificOutput']['hookEventName'], 'PostToolUse')
+        self.assertIn('DEC-001', run('context', 'src/a.py'))
+        self.assertNotIn('hook', run('--help'))
         run('task', 'record-check', 'live', '--name', 'smoke', '--kind', 'integration', '--result', 'PASS', '--evidence', 'CLI subprocess fixture')
         run('task', 'finish', 'live')
         self.assertEqual(load_task(self.root, 'live')['state'], 'done')
