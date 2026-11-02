@@ -1,5 +1,12 @@
 # Agentic Rail Core
 
+For staged development, read COLLABORATION.md and start with `process start`.
+`process brief` combines the collaboration envelope, decisions, flow and current keyword stage.
+Use `process advance` after the stage output exists, and `process rework` for changes or failures.
+The eight stages are analyze/design/implement/verify/review/integrate/handoff/reflect.
+Six operating domains describe responsibilities across stages, not six sequential gates.
+Legacy `task start` remains supported; its lifecycle is not silently migrated.
+
 1. Start with the user's goal and completion criteria. Choose only the relevant flow.
 2. Create one task with exact owned file paths and prerequisite task IDs. Inspect its brief.
 3. Load scoped decisions before designing/editing. Preserve both global and local decisions.

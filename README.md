@@ -1,16 +1,51 @@
 # agentic-rail
 
-**작업은 flow로 진행하고, 설계는 해당 파일의 결정에 근거하며, 위임할 때 승인 범위를 보존합니다.**
+**기존 협업 정책 안에서 개발 단계를 진행하고, 설계 결정·승인 범위·검증 근거를 보존합니다.**
 
 agentic-core의 작업 흐름·기록 방식과 설계 결정·변경 근거 전달 관점을
 결합한 독립 구현 MVP입니다. 결정은 작업 시작과 위임 시 명시적으로 전달합니다. 기존 두 프로젝트를 그대로 합친 포크는 아닙니다.
-Python 3.10 이상, 런타임 외부 패키지 없음. 현재 버전: **0.1.0**.
+Python 3.10 이상, 런타임 외부 패키지 없음. 현재 버전: **0.2.0**.
+
+## 협업 프로세스 안의 개발 단계
+
+담당자·Contract-first·선행 관계·PR 리뷰/병합 정책은 프로젝트의 기존 규칙을 유지합니다.
+새 `process` 명령은 그 안에서 **analyze → design → implement → verify → review →
+integrate → handoff → reflect** 단계를 진행하고, 단계별 근거와 전환 조건을 검사합니다.
+실패 또는 소스 변경 시 `process rework`로 분석·설계·구현으로 돌아갑니다.
+
+회의 정리의 Governance / Knowledge / Orchestration / Engineering / Quality /
+Intelligence는 순차적인 6단계가 아니라 각 개발 단계에 걸쳐 적용하는 운영 영역입니다.
+`.rail/process.json`에서 단계와 영역을 연결합니다. 8개 단계는 이번 기본 설계안입니다.
+
+```bash
+# init 후 프로젝트에서 실행
+python3 .rail/runtime/rail.py process start permission-02 \
+  --goal '권한 조회 API 구현' --owner permission-worker \
+  --path backend/permission.py --path frontend/permission.ts \
+  --contract-ref 'contract@<accepted-commit>' \
+  --integration-mode milestone --batch M1
+python3 .rail/runtime/rail.py process brief permission-02
+python3 .rail/runtime/rail.py process status permission-02
+python3 .rail/runtime/rail.py process graph
+python3 .rail/runtime/rail.py process graph --format json
+```
+
+리뷰를 마치면 **구현 완료**, 실제 integration PASS 이후 **통합 완료**로 별도 표시합니다.
+작업 done은 PR 인계·회고까지 마쳤다는 뜻이며 병합/배포 완료와 다릅니다.
+`process` 작업은 기존 `task finish`로 단계를 우회할 수 없습니다.
+`task start`로 생성한 기존 작업은 종전 완료 조건을 유지하며 자동 전환하지 않습니다.
+
+[단계별 실행 예시·그래프·6개 영역 매핑·한계](docs/development-process.md)를 참고하세요.
+상태 전환은 코드로 검사하지만 모델 호출·테스트 실행·리뷰 인증은 호스트/기존 CI의 책임입니다.
 
 ## 무엇을 하는가
 
 | 기능 | 구현 |
 |---|---|
 | 작은 진입점 + 선택적 절차 | Core와 code / contract / integrate flow |
+| 개발 상태 그래프 | 8개 키워드 단계·게이트·재작업·Mermaid/JSON 관계 출력 |
+| 협업 문맥 유지 | 담당자·계약 참조·강한 선행 작업·통합 제공자·PR별/묶음별 통합 |
+| 측정 | 단계 시각·결함 수·재작업 분과 사이클별 최신 실측 합계 |
 | 필요한 결정만 읽기 | 경로에 맞는 PRECEDENT.md 절의 본문과 근거 전달 |
 | 공통 결정 누락 방지 | 상위·하위 디렉터리의 적용 가능한 결정을 함께 사용 |
 | 결정 변경 근거 유지 | 작업·결정 ID·내용 해시·실제 사용자 지시·출처·변경 범위 기록 |
@@ -72,7 +107,9 @@ Python fnmatch 규칙으로 `*`는 `/`를 포함하므로 `backend/*`는 그 아
 경로 밖으로 나가는 패턴은 금지합니다. `retired` 결정은 기록만 남고 brief/context에 포함하지 않습니다.
 [사용자 관리 예시](examples/user-management/PRECEDENT.md)는 실제 저장소 계약을 확정한 내용이 아닙니다.
 
-## 작업과 위임
+## 기존 task 방식의 작업과 위임
+
+아래는 기존 경량 task API입니다. 단계별 개발은 위의 process 명령을 사용합니다.
 
 ```bash
 python3 .rail/runtime/rail.py task start permission-01 \
@@ -120,7 +157,7 @@ python3 .rail/runtime/rail.py task brief permission-01
 flow가 바뀌었다면 새 task로 다시 계획합니다. 승인 파일은 **운영자가 기록한 근거**이지
 사용자 본인임을 인증한 서명이 아닙니다. 임의 위조를 차단하는 보안 경계는 아닙니다.
 
-## 검증과 완료
+## 기존 task 방식의 검증과 완료
 
 실행 결과를 보고 기록하세요. Rail은 evidence 문자열을 명령으로 실행하지 않습니다.
 
@@ -147,6 +184,7 @@ contract는 contract PASS가 필요합니다. 결정 snapshot 변경 전의 검�
 - PRECEDENT.md의 결정 기록, 경로별 context, 작업 brief와 승인 근거 전달은 유지합니다.
 - 작업 중 규칙을 자동으로 다시 보여주거나 모델의 준수를 강제하지 않습니다.
 - context의 기본 8,000바이트 제한을 넘으면 오류로 알리며 조용히 자르지 않습니다.
+- process의 단계 근거·리뷰어·소스 리비전·측정 수치는 운영자 기록입니다. 자동 인증되지 않습니다.
 - 실제 모델 세션 연동은 NOT_RUN입니다. 모델별 준수율이나 생산성 개선을 입증하지 않았습니다.
 
 ### 기존 설치에서 전환
@@ -162,5 +200,6 @@ contract는 contract PASS가 필요합니다. 결정 snapshot 변경 전의 검�
 
 - [구조·권한 경계·원문 출처](docs/architecture.md)
 - [호스트 수동 검증 절차](docs/validation.md)
+- [협업·개발 단계·관계 모델](docs/development-process.md)
 
 2026-11-02 갱신. upstream 프로젝트의 소스 복제 없이 관점을 결합한 초기 구현입니다.

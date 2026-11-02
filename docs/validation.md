@@ -29,3 +29,13 @@ settings update and obsolete hooks.py deletion, then run init. Verify only the e
 Rail hook command is gone, other handlers remain, and the copied CLI works. Restart the host.
 Custom commands must be removed manually. No automatic read-time injection or edit blocking
 should remain from Rail. Old receipt files are unused.
+# Development process validation (v0.2.0)
+
+Run `python3 -m unittest discover -s tests -v`. Process tests cover skipped-stage and legacy-finish
+bypasses, stale checks after rework/reconcile, self-review rejection, Mock implementation versus
+live integration, deferred providers versus hard dependencies, milestone batches, graph/domain
+export, metric corrections and copied-runtime JSON asset installation. Existing task tests
+remain unchanged and validate backward compatibility.
+
+These tests use fixture evidence; they do not count as real project integration or LLM compliance.
+Host/model dispatch, source revision truth and external GitHub policy remain unverified.
