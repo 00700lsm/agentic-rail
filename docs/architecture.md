@@ -1,5 +1,25 @@
 # Architecture and boundaries
 
+## v0.2.0: development state graph inside collaboration
+
+The project collaboration process owns assignment, contract acceptance, PR/CI review and
+merge policy. A `process start` task records owner, contract reference, integration timing and
+provider dependencies; its internal graph runs analyze/design/implement/verify/review/integrate/
+handoff/reflect. `process.py` checks transitions and invalidates previous evidence on rework.
+This is an explicit CLI state machine, not automatic model orchestration or ontology inference.
+See [development process](development-process.md) for gates, the six-domain mapping and examples.
+
+- `.rail/process.json`: stage input/output/domain definition; version 1 has fixed ordered IDs.
+- `.rail/COLLABORATION.md`: project-customizable policy guidance, preserving existing collaboration.
+- `.rail/tasks/<id>.json` `process`: current stage, cycle, collaboration envelope, milestones,
+  stage history and metrics. Existing schema-1 tasks without this field keep legacy behavior.
+- `process graph --format json`: typed stage/domain nodes and next/serves/rework edges.
+
+Local unit/contract PASS and independent-review evidence can complete implementation before
+live integration. Only integration PASS completes integration. Handoff and reflection finish
+the local task, not the external PR. Reviewer strings and evidence are not authenticated.
+New development reuses the existing scoped-decision and original-digest approval model below.
+
 ```mermaid
 flowchart TD
     U["User goal and existing authorization"] --> T["Task: flow, paths, dependencies"]
@@ -45,6 +65,7 @@ semantic priority. Stable IDs and content hashes keep stale approvals from being
 
 `task brief` combines the goal, paths, dependencies, flow, scoped decision bodies and recorded
 user authorization. The caller reads it at task start and passes it to the worker's prompt.
+`process brief` also includes the current development stage's input/output requirements.
 Rail does not invoke models or automatically dispatch tasks. `context <paths>` remains available
 for explicit reads when the working scope expands.
 

@@ -226,11 +226,16 @@ def brief(root, task_id):
         raise RailError('; '.join(errors))
     body, _ = context(root, task['paths'], budget=100000)
     flow = inside(root, f".rail/flows/{task['flow']}.md").read_text(encoding='utf-8')
+    process_context = ''
+    if 'process' in task:
+        from .process import validate
+        validate(root, task)
+        process_context = '\n## Collaboration and development state\n' + json.dumps(task['process'], ensure_ascii=False, indent=2)
     return (f"# Task {task_id}\nGoal: {task['goal']}\nOwned paths: {', '.join(task['paths'])}\n"
             f"Dependencies: {', '.join(task['depends']) or 'none'}\n\n{flow}\n\n{body}\n\n"
             '## User authorization evidence (unverified operator records)\n' +
             json.dumps(task['approvals'], ensure_ascii=False, indent=2) +
-            '\nDo not broaden path ownership or authorization. Return checks, conflicts and remaining work.\n')
+            '\nDo not broaden path ownership or authorization. Return checks, conflicts and remaining work.\n' + process_context)
 
 
 def reconcile(root, task_id):

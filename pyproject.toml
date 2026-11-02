@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-rail"
-version = "0.1.0"
+version = "0.2.0"
 description = "Task flows, scoped decision context and explicit authorization handoffs"
 requires-python = ">=3.10"
 dependencies = []
@@ -16,4 +16,4 @@ agentic-rail = "agentic_rail.cli:main"
 include = ["agentic_rail*"]
 
 [tool.setuptools.package-data]
-agentic_rail = ["assets/*.md", "assets/flows/*.md"]
+agentic_rail = ["assets/*.md", "assets/*.json", "assets/flows/*.md"]

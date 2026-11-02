@@ -7,14 +7,18 @@ from .core import RailError, inside, read_json
 BEGIN, END = '<!-- agentic-rail:start -->', '<!-- agentic-rail:end -->'
 BLOCK = '''<!-- agentic-rail:start -->
 ## Agentic Rail
-For changes, read `.rail/CORE.md`, choose one relevant `.rail/flows/*.md`,
-and create a task before editing. Read `python3 .rail/runtime/rail.py task brief <id>`
+For development, read `.rail/CORE.md` and `.rail/COLLABORATION.md`, then use
+`process start` and `process brief` for keyword stages defined in `.rail/process.json`.
+Legacy `task start` remains available for existing code/contract/integrate workflows.
+Read `python3 .rail/runtime/rail.py task brief <id>`
 at task start and pass its output to delegated workers. Use
 `python3 .rail/runtime/rail.py context <paths>` when the working scope expands.
 Treat PRECEDENT.md as project decisions, subject to higher-priority instructions.
 Carry actual user authorization and owned paths through delegation; never invent approval.
 Existing explicit user authorization remains valid: do not ask twice.
 Run task check, relevant tests and actual integration checks; distinguish PASS / FAIL / NOT_RUN.
+Use process rework after source changes or reconciled decisions; earlier evidence is not reusable.
+Keep project PR/review/merge policies. Prefix commit subjects with the actual release version.
 <!-- agentic-rail:end -->
 '''
 
@@ -37,12 +41,14 @@ def initialize(root, claude=False, dry_run=False):
         if not (preserve and target.exists()):
             planned[target] = content
     put('.rail/CORE.md', (assets / 'CORE.md').read_text(encoding='utf-8'), True)
+    put('.rail/COLLABORATION.md', (assets / 'COLLABORATION.md').read_text(encoding='utf-8'), True)
+    put('.rail/process.json', (assets / 'process.json').read_text(encoding='utf-8'), True)
     for flow in sorted((assets / 'flows').glob('*.md')):
         put('.rail/flows/' + flow.name, flow.read_text(encoding='utf-8'), True)
     for source in Path(__file__).parent.glob('*.py'):
         put('.rail/runtime/agentic_rail/' + source.name, source.read_text(encoding='utf-8'))
     # Assets travel with the runtime so its init --dry-run remains usable.
-    for source in assets.rglob('*.md'):
+    for source in sorted(p for p in assets.rglob('*') if p.is_file() and p.suffix in ('.md', '.json')):
         put('.rail/runtime/agentic_rail/assets/' + source.relative_to(assets).as_posix(), source.read_text(encoding='utf-8'))
     put('.rail/runtime/rail.py', 'from agentic_rail.cli import main\nraise SystemExit(main())\n')
     existing_claude = inside(root, 'CLAUDE.md')

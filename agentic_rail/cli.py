@@ -6,6 +6,7 @@ from . import __version__
 from .core import (RailError, approve, brief, check_task, context, decisions, load_task,
                    reconcile, start, task_path, timestamp, write_json)
 from .install import initialize
+from . import process
 
 
 def parser():
@@ -20,6 +21,7 @@ def parser():
     c.add_argument('paths', nargs='+')
     c.add_argument('--budget', type=int, default=8000, help='UTF-8 byte limit; never silently truncates')
     sub.add_parser('audit')
+    process.register(sub)
     task = sub.add_parser('task').add_subparsers(dest='action', required=True)
     s = task.add_parser('start')
     s.add_argument('id')
@@ -52,6 +54,8 @@ def run(args):
     if args.command == 'audit':
         records = decisions(root)
         return {'status': 'PASS', 'decisions': len(records), 'active': sum(d.status == 'active' for d in records)}, 0
+    if args.command == 'process':
+        return process.run(root, args), 0
     action = args.action
     if action == 'start':
         return start(root, args.id, args.goal, args.flow, args.path, args.depends), 0
@@ -62,14 +66,23 @@ def run(args):
     if action == 'reconcile':
         return reconcile(root, args.id), 0
     task = load_task(root, args.id)
+    if 'process' in task:
+        process.validate(root, task)
+        if action == 'finish':
+            raise RailError('Process tasks finish through process advance --stage reflect; task finish cannot bypass stages')
     if action == 'record-check':
         if task['state'] == 'done':
             raise RailError('Completed tasks are immutable')
+        if 'process' in task and task['process']['stage'] not in ('verify', 'integrate'):
+            raise RailError('Process checks belong to verify/integrate; rework before rerunning completed stages')
         if not args.name.strip() or not args.evidence.strip():
             raise RailError('Check name and evidence must not be empty')
         task['checks'].append(dict(name=args.name, kind=args.kind, result=args.result,
                                    evidence=args.evidence, recorded_at=timestamp(),
                                    decisions=task['decisions'], flow_sha=task['flow_sha']))
+        if 'process' in task:
+            p = task['process']
+            task['checks'][-1].update(process_cycle=p['cycle'], process_stage=p['stage'], revision=p['revision'])
         task['state'] = 'doing'
         write_json(task_path(root, args.id), task)
         return task, 0
