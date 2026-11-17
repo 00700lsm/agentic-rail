@@ -87,7 +87,7 @@ def finish(root, state):
                 note='No PR merge and no semantic conflict auto-resolution')
 
 
-def run(root, task_id, branch='', base='main', remote='origin', actor='', evidence='',
+def run(root, task_id, branch='', base='dev', remote='origin', actor='', evidence='',
         push=False, resume=False, abort=False):
     root = Path(root).resolve()
     process.require(actor, evidence)
