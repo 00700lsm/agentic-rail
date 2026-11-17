@@ -30,3 +30,13 @@ branch policy remain authoritative. Rail records evidence; it does not authentic
 
 Six operating domains: Governance, Knowledge, Orchestration, Engineering, Quality, Intelligence.
 They span both collaboration and development; they are not six sequential steps.
+
+
+11. PR branch conflicts belong to collaboration: use `collaboration pr-rebase` for a
+    recorded PR on a clean checked-out branch. Git may rebase clean changes automatically;
+    stop on semantic conflicts and resolve deliberately. Use `--continue` / `--abort`.
+    A changed PR branch invalidates previous development tests and review, returning to
+    implementation; re-test and re-review before it can rejoin the milestone. `--push`
+    is explicit and uses force-with-lease. Rebase never merges or approves a PR.
+12. Logical proof/intensity applies to per-task development, not collaboration. The two
+    tracks exchange readiness and failure/rework only; live integration is collaboration-owned.
