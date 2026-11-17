@@ -1,6 +1,6 @@
 """One Rail: collaboration owns integration timing and groups ready development tasks."""
 from . import process
-from . import pr_rebase
+from . import pr_rebase, pr_preflight
 from .core import RailError, digest, inside, load_task, read_json, safe_id, timestamp, write_json
 import json
 
@@ -162,6 +162,11 @@ def register(sub):
     c.add_argument('--batch', default='')
     c.add_argument('--owner', required=True)
     c.add_argument('--trigger', required=True, help='Agreed milestone criteria or PR integration trigger')
+    pre = commands.add_parser('pr-preflight', help='Check cumulative Git conflicts before integrating multiple PR branches')
+    pre.add_argument('--branch', action='append', required=True, help='PR branch; repeat for each PR')
+    pre.add_argument('--stack', action='append', default=[], help='Optional CHILD:PARENT relation; repeat')
+    pre.add_argument('--base', default='main')
+    pre.add_argument('--remote', default='origin')
     commands.add_parser('status').add_argument('id')
     pr = commands.add_parser('pr-rebase', help='Rebase a recorded PR branch; conflicts require explicit resolution')
     pr.add_argument('id', help='Development task ID (not collaboration plan ID)')
@@ -195,6 +200,8 @@ def register(sub):
 
 
 def run(root, a):
+    if a.collaboration_action == 'pr-preflight':
+        return pr_preflight.preflight(root, a.branch, a.stack, a.base, a.remote)
     if a.collaboration_action == 'pr-rebase':
         return pr_rebase.run(root, a.id, a.branch, a.base, a.remote, a.actor, a.evidence,
                              a.push, a.resume, a.abort)
