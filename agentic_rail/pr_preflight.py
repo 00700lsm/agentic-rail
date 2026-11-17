@@ -1,6 +1,6 @@
 """Non-mutating multi-PR preflight, including dependent/stacked branches.
 
-Git's merge-tree checks the *cumulative* tree, not isolated PR-to-main diffs.
+Git's merge-tree checks the *cumulative* tree, not isolated PR-to-dev diffs.
 Synthetic commits are written only to Git's object database; no refs, index,
 working files, PRs, or protected branches are modified. Git >= 2.38 required.
 """
@@ -47,7 +47,7 @@ def order_branches(branches, parents):
     return ordered
 
 
-def preflight(root, branches, stacks=(), base='main', remote='origin'):
+def preflight(root, branches, stacks=(), base='dev', remote='origin'):
     root = Path(root).resolve()
     branch_name(root, base)
     if not remote or not SAFE_REMOTE.fullmatch(remote) or remote in ('.', '..'):
