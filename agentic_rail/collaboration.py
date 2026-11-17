@@ -80,7 +80,7 @@ def begin(root, plan_id, actor, evidence, revision, environment, milestone_reach
     process.require(actor, evidence, revision, environment)
     plan = load(root, plan_id)
     members = snapshot(root, plan)
-    if plan.get('target_branch') == 'dev':
+    if plan.get('target_branch') == 'dev' and plan.get('pr_branches'):
         receipt = plan.get('preflight')
         if not receipt or receipt.get('status') != 'CLEAN':
             raise RailError('dev integration requires a CLEAN collaboration pr-preflight --plan receipt')
@@ -232,12 +232,9 @@ def run(root, a):
             plan = load(root, a.plan)
             if plan.get('target_branch') != a.base:
                 raise RailError('Preflight target branch differs from collaboration target')
-            if set(result['order']) != set(plan['members']):
-                # A PR may have a different branch name than its task; require each member
-                # to be explicitly listed and mapped in the plan (see mapping below).
-                mapping = plan.get('pr_branches', {})
-                if not mapping or set(mapping) != set(plan['members']) or set(mapping.values()) != set(result['order']):
-                    raise RailError('Plan needs exact task-to-PR branch mapping (--pr-branch TASK:BRANCH at create)')
+            mapping = plan.get('pr_branches', {})
+            if not mapping or set(mapping) != set(plan['members']) or set(mapping.values()) != set(result['order']):
+                raise RailError('Plan needs exact task-to-PR branch mapping (--pr-branch TASK:BRANCH at create)')
             if result['status'] != 'CLEAN':
                 raise RailError('Cannot attach a non-CLEAN PR preflight to a collaboration plan')
             plan['preflight'] = dict(status='CLEAN', branches=a.branch, stacks=a.stack,
