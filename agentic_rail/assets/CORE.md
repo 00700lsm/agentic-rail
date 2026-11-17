@@ -24,3 +24,10 @@ Legacy `task start` remains supported; its lifecycle is not silently migrated.
 Host permissions and system/developer instructions remain authoritative. Rail is workflow
 assistance, not an authentication system or a sandbox. Read only the selected flow and
 scoped decisions; do not preload the full decision inventory or task history.
+
+
+For newly started v2 development tasks, `process start --intensity 1|2|3 --delegation
+ off|auto|mass` can opt into recorded proof/review gates. Use `process gate` and
+ `process prove` during design/verification. These do not execute tests or dispatch workers.
+ PR branch reconciliation is a separate collaboration operation: `collaboration pr-rebase`.
+ Rebase changes require new development verification and PR review before integration.
