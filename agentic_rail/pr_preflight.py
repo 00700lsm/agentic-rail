@@ -39,7 +39,7 @@ def order_branches(branches, parents):
     pending = list(branches)
     ordered = []
     while pending:
-        ready = [b for b in pending if b not in parents or parents[b] in ordered]
+        ready = [b for b in pending if b not in parents or parents[b] in ordered or parents[b] not in branches]
         if not ready:
             raise RailError('Stack dependency cycle or missing parent: ' + ', '.join(pending))
         ordered.extend(ready)
