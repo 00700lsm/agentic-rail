@@ -1,5 +1,6 @@
 """One Rail: collaboration owns integration timing and groups ready development tasks."""
 from . import process
+from . import pr_rebase
 from .core import RailError, digest, inside, load_task, read_json, safe_id, timestamp, write_json
 import json
 
@@ -162,6 +163,17 @@ def register(sub):
     c.add_argument('--owner', required=True)
     c.add_argument('--trigger', required=True, help='Agreed milestone criteria or PR integration trigger')
     commands.add_parser('status').add_argument('id')
+    pr = commands.add_parser('pr-rebase', help='Rebase a recorded PR branch; conflicts require explicit resolution')
+    pr.add_argument('id', help='Development task ID (not collaboration plan ID)')
+    pr.add_argument('--branch', default='')
+    pr.add_argument('--base', default='main')
+    pr.add_argument('--remote', default='origin')
+    pr.add_argument('--actor', required=True)
+    pr.add_argument('--evidence', required=True)
+    pr.add_argument('--push', action='store_true', help='Update PR branch using force-with-lease after successful rebase')
+    control = pr.add_mutually_exclusive_group()
+    control.add_argument('--continue', dest='resume', action='store_true')
+    control.add_argument('--abort', action='store_true')
     for name in ('start', 'record-check', 'rework', 'finish'):
         c = commands.add_parser(name)
         c.add_argument('id')
@@ -183,6 +195,9 @@ def register(sub):
 
 
 def run(root, a):
+    if a.collaboration_action == 'pr-rebase':
+        return pr_rebase.run(root, a.id, a.branch, a.base, a.remote, a.actor, a.evidence,
+                             a.push, a.resume, a.abort)
     if a.collaboration_action == 'create': return create(root, a.id, a.task, a.mode, a.batch, a.owner, a.trigger, a.check)
     if a.collaboration_action == 'status': return status(root, a.id)
     if a.collaboration_action == 'start': return begin(root, a.id, a.actor, a.evidence, a.revision, a.environment, a.milestone_reached)
