@@ -81,8 +81,10 @@ def preflight(root, branches, stacks=(), base='dev', remote='origin'):
         return git(root, 'rev-parse', '--verify', 'refs/remotes/' +
                    remote + '/' + branch + '^{commit}').stdout.strip()
 
-    commit = remote_sha(base)
+    base_sha = remote_sha(base)
+    commit = base_sha
     refs = {branch: remote_sha(branch) for branch in ordered}
+    pinned_refs = dict(base=base_sha, heads=refs)
     report = []
     env = os.environ.copy()
     env.update(GIT_AUTHOR_NAME='Agentic Rail', GIT_AUTHOR_EMAIL='rail@invalid.local',
@@ -97,7 +99,7 @@ def preflight(root, branches, stacks=(), base='dev', remote='origin'):
                 report.append(dict(branch=branch, parent=parent, status='OUTDATED_STACK',
                                    reason='PR head does not contain declared parent tip; restack and retest'))
                 return dict(status='BLOCKED', base=base, remote=remote,
-                            order=ordered, checks=report, mutated_refs=False,
+                            order=ordered, checks=report, refs=pinned_refs, mutated_refs=False,
                             note='No source files, refs or PRs were changed')
             if relation:
                 raise RailError('Cannot inspect stack ancestry')
@@ -108,7 +110,7 @@ def preflight(root, branches, stacks=(), base='dev', remote='origin'):
                                status='CONFLICT',
                                details=(merged.stdout + '\n' + merged.stderr)[-3000:]))
             return dict(status='CONFLICT', base=base, remote=remote,
-                        order=ordered, checks=report, mutated_refs=False,
+                        order=ordered, checks=report, refs=pinned_refs, mutated_refs=False,
                         note='A cumulative trial merge failed; resolve/restack then rerun')
         if merged.returncode:
             raise RailError('merge-tree failed: ' + (merged.stderr or merged.stdout)[-1200:])
