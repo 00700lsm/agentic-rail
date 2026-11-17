@@ -46,8 +46,20 @@ def current(root, plan):
     return plan['attempts'][-1]
 
 
-def create(root, plan_id, members, mode, batch, owner, trigger, required_checks):
+def create(root, plan_id, members, mode, batch, owner, trigger, required_checks, target_branch='dev', pr_branches=()):
     process.require(owner, trigger, *required_checks)
+    mapping = {}
+    for entry in pr_branches:
+        if ':' not in entry:
+            raise RailError('--pr-branch must use TASK:BRANCH')
+        task, branch = entry.split(':', 1)
+        safe_id(task)
+        pr_preflight.branch_name(root, branch)
+        if task in mapping:
+            raise RailError('Duplicate PR mapping for task ' + task)
+        mapping[task] = branch
+    if mapping and (set(mapping) != set(members) or len(set(mapping.values())) != len(mapping)):
+        raise RailError('Map exactly one unique PR branch for every collaboration task')
     if not required_checks:
         raise RailError("Declare required live checks before integration")
     members = list(dict.fromkeys(members))
@@ -59,7 +71,7 @@ def create(root, plan_id, members, mode, batch, owner, trigger, required_checks)
             raise RailError('Plan members must be v2 tasks with matching integration mode/batch')
     plan = dict(version=1, id=plan_id, owner=owner, members=members, mode=mode,
                 batch=batch, trigger=trigger, required_checks=list(dict.fromkeys(required_checks)),
-                state='waiting', attempts=[], history=[])
+                target_branch=target_branch, pr_branches=mapping, state='waiting', attempts=[], history=[])
     write_json(path(root, plan_id), plan, exclusive=True)
     return plan
 
@@ -68,6 +80,17 @@ def begin(root, plan_id, actor, evidence, revision, environment, milestone_reach
     process.require(actor, evidence, revision, environment)
     plan = load(root, plan_id)
     members = snapshot(root, plan)
+    if plan.get('target_branch') == 'dev':
+        receipt = plan.get('preflight')
+        if not receipt or receipt.get('status') != 'CLEAN':
+            raise RailError('dev integration requires a CLEAN collaboration pr-preflight --plan receipt')
+        if receipt.get('members') != members:
+            raise RailError('Development task evidence changed since dev preflight; rerun it')
+        # The latest remote SHA is fetched again, not trusted from a stale local ref.
+        checks = pr_preflight.preflight(root, receipt['branches'], receipt['stacks'],
+                                        'dev', receipt['remote'])
+        if checks['status'] != 'CLEAN' or checks.get('refs') != receipt.get('refs'):
+            raise RailError('dev or PR head changed since preflight; rerun pr-preflight --plan')
     if plan['mode'] == 'milestone' and not milestone_reached:
         raise RailError('Explicit --milestone-reached is required; readiness alone does not start integration')
     if plan['attempts']:
@@ -157,13 +180,16 @@ def register(sub):
     c = commands.add_parser('create')
     c.add_argument('id')
     c.add_argument('--task', action='append', required=True)
+    c.add_argument('--pr-branch', action='append', default=[], help='TASK:BRANCH mapping for dev preflight')
     c.add_argument('--check', action='append', required=True, help='Required actual integration check name; repeat for each check')
     c.add_argument('--mode', choices=['milestone', 'per-pr'], default='milestone')
     c.add_argument('--batch', default='')
     c.add_argument('--owner', required=True)
     c.add_argument('--trigger', required=True, help='Agreed milestone criteria or PR integration trigger')
+    c.add_argument('--target-branch', choices=['dev', 'main'], default='dev')
     pre = commands.add_parser('pr-preflight', help='Check cumulative Git conflicts before integrating multiple PR branches')
     pre.add_argument('--branch', action='append', required=True, help='PR branch; repeat for each PR')
+    pre.add_argument('--plan', default='', help='Save a clean preflight for this collaboration plan')
     pre.add_argument('--stack', action='append', default=[], help='Optional CHILD:PARENT relation; repeat')
     pre.add_argument('--base', default='dev')
     pre.add_argument('--remote', default='origin')
@@ -201,11 +227,29 @@ def register(sub):
 
 def run(root, a):
     if a.collaboration_action == 'pr-preflight':
-        return pr_preflight.preflight(root, a.branch, a.stack, a.base, a.remote)
+        result = pr_preflight.preflight(root, a.branch, a.stack, a.base, a.remote)
+        if a.plan:
+            plan = load(root, a.plan)
+            if plan.get('target_branch') != a.base:
+                raise RailError('Preflight target branch differs from collaboration target')
+            if set(result['order']) != set(plan['members']):
+                # A PR may have a different branch name than its task; require each member
+                # to be explicitly listed and mapped in the plan (see mapping below).
+                mapping = plan.get('pr_branches', {})
+                if not mapping or set(mapping) != set(plan['members']) or set(mapping.values()) != set(result['order']):
+                    raise RailError('Plan needs exact task-to-PR branch mapping (--pr-branch TASK:BRANCH at create)')
+            if result['status'] != 'CLEAN':
+                raise RailError('Cannot attach a non-CLEAN PR preflight to a collaboration plan')
+            plan['preflight'] = dict(status='CLEAN', branches=a.branch, stacks=a.stack,
+                                    remote=a.remote, refs=result['refs'], members=snapshot(root, plan),
+                                    recorded_at=timestamp())
+            save(root, plan)
+        return result
     if a.collaboration_action == 'pr-rebase':
         return pr_rebase.run(root, a.id, a.branch, a.base, a.remote, a.actor, a.evidence,
                              a.push, a.resume, a.abort)
-    if a.collaboration_action == 'create': return create(root, a.id, a.task, a.mode, a.batch, a.owner, a.trigger, a.check)
+    if a.collaboration_action == 'create': return create(root, a.id, a.task, a.mode, a.batch, a.owner, a.trigger, a.check,
+                                                              a.target_branch, a.pr_branch)
     if a.collaboration_action == 'status': return status(root, a.id)
     if a.collaboration_action == 'start': return begin(root, a.id, a.actor, a.evidence, a.revision, a.environment, a.milestone_reached)
     if a.collaboration_action == 'record-check': return record(root, a.id, a.name, a.result, a.evidence, a.actor, a.affected)
