@@ -5,6 +5,7 @@ queries GitHub. v1 projects retain the old lifecycle without silent migration.
 """
 import json
 from . import process_v1 as legacy
+from . import assurance
 from .core import RailError, brief, check_task, digest, inside, load_task, start, task_path, timestamp, write_json
 
 STAGES = ('analyze', 'design', 'implement', 'verify', 'review')
@@ -53,7 +54,7 @@ def require(*values):
         raise RailError('Actor, evidence and required references must not be empty')
 
 
-def begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch, providers):
+def begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch, providers, intensity=None, delegation='auto'):
     spec, sha = definition(root)
     if spec['version'] == 1:
         return legacy.begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch, providers)
@@ -72,6 +73,8 @@ def begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch,
         providers=list(dict.fromkeys(providers)), revision='', history=[], metrics=[],
         implementation_complete=False, integration_ready=False,
         review={'state': 'not_requested'}, decisions=dict(task['decisions']))
+    if intensity is not None:
+        task['process']['assurance'] = assurance.configure(intensity, delegation)
     return save(root, task)
 
 
@@ -83,6 +86,8 @@ def advance(root, task_id, stage, actor, evidence, revision='', pr=''):
     require(actor, evidence)
     if stage not in STAGES or p['stage'] != stage:
         raise RailError('Only the current development stage may advance')
+    if stage in ('design', 'verify'):
+        assurance.require_gate(task, stage)
     if stage == 'implement':
         require(revision)
         p['revision'] = revision
@@ -146,7 +151,7 @@ def status(root, task_id):
     p = validate(root, task)
     if p['version'] == 1:
         return legacy.status(root, task_id)
-    return dict(task=task_id, state=task['state'], **p,
+    return dict(task=task_id, state=task['state'], assurance_gate=assurance.evaluate(task, p['stage']), **p,
         live_integration='See collaboration status; readiness is not integration success',
         assurance='Operator records only; no GitHub request, authenticated approval, test execution or merge')
 
@@ -156,7 +161,7 @@ def instructions(root, task_id):
     p = validate(root, task)
     spec, _ = definition(root)
     stage = next((s for s in spec['stages'] if s['id'] == p['stage']), {'id': p['stage']})
-    return brief(root, task_id) + '\n## Development stage\n' + json.dumps(stage, ensure_ascii=False, indent=2)
+    return brief(root, task_id) + '\n## Assurance policy\n' + assurance.brief_policy(task) + '\n## Development stage\n' + json.dumps(stage, ensure_ascii=False, indent=2)
 
 
 def graph(root, format='mermaid'):
@@ -194,6 +199,18 @@ def graph(root, format='mermaid'):
 def register(sub):
     # Keep v1 arguments available for preserved v1 projects.
     commands = legacy.register(sub)
+    start_parser = next(a for a in commands._name_parser_map['start']._actions if a.dest == 'id')
+    del start_parser  # Existing start parser is extended, not replaced.
+    commands._name_parser_map['start'].add_argument('--intensity', type=int, choices=[1, 2, 3])
+    commands._name_parser_map['start'].add_argument('--delegation', choices=assurance.MODES, default='auto')
+    g = commands.add_parser('gate')
+    g.add_argument('id')
+    proof = commands.add_parser('prove')
+    proof.add_argument('id')
+    proof.add_argument('--kind', required=True, choices=assurance.KINDS)
+    proof.add_argument('--result', required=True, choices=['PASS', 'FAIL', 'NOT_RUN'])
+    proof.add_argument('--actor', required=True)
+    proof.add_argument('--evidence', required=True)
     for name in ('request-review', 'review-result'):
         s = commands.add_parser(name)
         s.add_argument('id')
@@ -208,9 +225,20 @@ def register(sub):
 def run(root, args):
     a = args.process_action
     if a == 'graph': return graph(root, args.format)
+    if a == 'gate':
+        task = load_task(root, args.id)
+        p = validate(root, task)
+        return assurance.evaluate(task, p['stage'])
+    if a == 'prove':
+        task = load_task(root, args.id)
+        p = validate(root, task)
+        assurance.record(task, args.kind, args.result, args.actor, args.evidence)
+        save(root, task)
+        return assurance.evaluate(task, p['stage'])
     if a == 'start':
         return begin(root, args.id, args.goal, args.path, args.depends, args.owner,
-                     args.contract_ref, args.integration_mode, args.batch, args.provider)
+                     args.contract_ref, args.integration_mode, args.batch, args.provider,
+                     args.intensity, args.delegation)
     if a == 'status': return status(root, args.id)
     if a == 'brief': return instructions(root, args.id)
     if a == 'advance': return advance(root, args.id, args.stage, args.actor, args.evidence, args.revision, args.pr)
