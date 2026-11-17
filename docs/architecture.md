@@ -1,5 +1,10 @@
 # Architecture and boundaries
 
+## v0.4.0 separation of concerns
+
+Development `process` owns intensity/proof and independent-review gates; collaboration owns PR branch reconciliation, milestone readiness and live integration. Neither PR rebasing nor recorded proof counts as a GitHub approval. PR rebases with new commits invalidate local development approval and verification, returning to implementation; status snapshots prevent reuse of old integration runs. See [flow and proof](flow-and-proof.md).
+
+
 ## v0.3.0: collaboration owns integration, development produces ready tasks
 
 One Rail CLI has nested responsibilities. `process.py` controls v2 per-task development:
