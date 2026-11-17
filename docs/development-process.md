@@ -1,4 +1,4 @@
-# 협업 안의 개발 흐름 — v0.3.0
+# 협업 안의 개발 흐름 — v0.4.0
 
 하나의 Rail에서 `process`는 개별 개발 작업, `collaboration`은 여러 작업의 통합을 관리한다.
 PoC의 기본 방향은 **계약 기반 병렬 개발 → Mock 검증 → PR 승인 요청·리뷰 → 마일스톤 사후 통합**이다.
@@ -147,3 +147,22 @@ rail collaboration rework M1 --task permission --actor coordinator --evidence '<
   검증하지 않는다. 운영 상태와 결과를 정직하게 남기는 CLI이며 보안 경계가 아니다.
 - per-pr도 지원한다. 작업과 묶음에 동일한 mode/batch를 지정하고 해당 PR의 통합 시작 근거를
   기록한다. 마일스톤 플래그만 생략하며 실제 통합 PASS 조건은 동일하다.
+
+
+## v0.4.0 PR 충돌 복구 (협업 트랙)
+
+실제 PR 브랜치를 체크아웃하고 원격에 최신 브랜치를 push한 다음, 해당 작업이 `review` 또는 `ready` 상태이고 PR 요청 기록이 있을 때 다음을 실행한다. 이는 해당 브랜치의 코드 실행/배포가 아니라 Git rebase다.
+
+```bash
+rail collaboration pr-rebase permission --branch feature/permission --base main \\
+  --actor coordinator --evidence 'PR 베이스 브랜치 변경에 따른 충돌 검토'
+# 성공 시 원격 PR 브랜치도 갱신하려면 --push 옵션을 처음 명령에 추가
+# 내용 충돌: 직접 해결하고 git add <파일> 후
+rail collaboration pr-rebase permission --continue --actor coordinator --evidence '충돌 해소 확인'
+# 또는 리베이스 취소
+rail collaboration pr-rebase permission --abort --actor coordinator --evidence '작업 취소'
+```
+
+리베이스 후 커밋이 변경됐다면 `process rework --to implement`에 해당하는 상태 전환이 발생한다. 기존 단위/계약/Mock 테스트와 PR 승인은 새 리비전에 유효하지 않다. 수정한 브랜치로 재검증 및 새로운 리뷰를 수행한 뒤 다시 `ready` 상태가 되어야 사후 통합을 시작할 수 있다. 내용 충돌을 자동으로 어느 한쪽으로 해결하지 않으며, 실패 시 근거 없이 PASS 처리하지 않는다.
+
+작업 강도·전제/불변식/연역/반례/대우 검증은 협업이 아니라 개발 트랙 소관이다. [두 트랙 실행 정책](flow-and-proof.md) 참조.
