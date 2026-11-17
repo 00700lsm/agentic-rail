@@ -4,7 +4,7 @@
 
 `agentic-rail`은 AI 에이전트에게 작업을 맡길 때 **"왜 이렇게 설계했는지(설계 결정)", "어디까지 수정해도 되는지(승인 범위)", "실제로 테스트를 통과했는지(검증 근거)"**가 유실되지 않도록 잡아주는 독립 실행형 도구(MVP)입니다.
 
-기존 `agentic-core`의 작업 기록 방식과 설계 결정 전달 방식을 결합해 처음부터 새로 구현했으며, 기존 프로젝트의 단순 포크(Fork)가 아닙니다. 외부 패키지 설치 없이 **Python 3.10 이상 표준 라이브러리**만으로 바로 동작합니다. (현재 버전: **0.3.0**)
+기존 `agentic-core`의 작업 기록 방식과 설계 결정 전달 방식을 결합해 처음부터 새로 구현했으며, 기존 프로젝트의 단순 포크(Fork)가 아닙니다. 외부 패키지 설치 없이 **Python 3.10 이상 표준 라이브러리**만으로 바로 동작합니다. (현재 버전: **0.4.0**)
 
 ## 왜 필요한가요? (핵심 역할)
 
@@ -180,7 +180,7 @@ python3 .rail/runtime/rail.py task finish permission-01
 * 등록한 모든 검사 항목의 최신 결과가 `PASS`여야 `task finish`가 성공합니다 (`code`/`integrate` 플로우는 `integration PASS` 필수, `contract` 플로우는 `contract PASS` 필수).
 * 만약 설계 결정 스냅샷이 중간에 바뀌었다면 이전 테스트 결과는 무효가 되므로 다시 검증해 기록해야 합니다. 소스 코드 커밋 변경을 자동으로 감시하지는 않으므로, 어떤 커밋(SHA)을 기준으로 검증했는지 `--evidence`에 함께 적어두세요.
 
-## 현재 버전(v0.3.0)의 동작 한계 및 이전 버전에서 업데이트하기
+## 현재 버전(v0.4.0)의 동작 한계 및 이전 버전에서 업데이트하기
 
 ### 알아두어야 할 한계
 
@@ -210,3 +210,30 @@ python3 .rail/runtime/rail.py task finish permission-01
 * [협업 규칙 및 개발·사후 통합 프로세스](docs/development-process.md)
 
 *2026-11-03 업데이트 — 기존 레퍼런스 프로젝트의 소스를 복제하지 않고 핵심 관점을 결합해 독자적으로 구현한 프로젝트입니다.*
+
+
+## v0.4.0 — 두 트랙의 별도 제어 및 PR 리베이스
+
+- **개발 트랙(process)**: `process start --intensity 1|2|3 --delegation off|auto|mass`로 선택적인 기록형 검증 게이트를 생성한다. 기존 기록은 자동 변경하지 않는다. 강도 2·3은 설계 단계에 전제·불변식·연역·반례·대우 검증 결과를 요구하며, 구현 검토를 거친 뒤에만 단계가 진행된다. 강도 3은 독립 설계 검토도 필요하다. `mass`는 2단계부터 독립 설계 검토를 추가하지만 서브에이전트를 실제 호출하지 않는 정책 정보다.
+- **협업 트랙(collaboration)**: 기존 마일스톤/PR 단위 통합을 유지한다. PR 충돌은 `collaboration pr-rebase`로 현재 로컬 PR 브랜치를 기준 브랜치에 리베이스한다. 자동 해결 가능한 변경은 진행하고 내용 충돌은 Git에서 중단하여 사람이나 권한 있는 에이전트가 해소한 뒤 재개한다.
+- **재검증**: 리베이스로 커밋이 바뀐 경우 개발 작업은 `implement`로 되돌리고 소스 revision, 테스트 및 기존 PR 리뷰 근거를 재사용하지 않는다. 필요한 검증/승인 후 협업 통합을 다시 시작한다. `--push`는 별도 명시 옵션이며 `--force-with-lease`를 사용한다. PR 병합/승인/CI 실행은 하지 않는다.
+
+```bash
+# 개발 트랙: 신규 v2 작업에 한해 검증 정책 선택
+python3 .rail/runtime/rail.py process start feature-01 --goal '권한 개선' \\
+  --owner developer --path backend/permission.py --contract-ref contract@abc \\
+  --integration-mode milestone --batch M1 --intensity 3 --delegation auto
+python3 .rail/runtime/rail.py process gate feature-01
+# analyze 단계를 마친 후 design 단계에서 아래 종류별로 근거와 결과를 기록
+python3 .rail/runtime/rail.py process prove feature-01 --kind premise --result PASS --actor developer --evidence '근거 경로/명세'
+# invariant, deduction, counterexample, contrapositive, design-review 도 같은 형식으로 기록
+
+# 협업 트랙: Git 저장소의 PR 브랜치를 체크아웃한 뒤 실행
+python3 .rail/runtime/rail.py collaboration pr-rebase feature-01 --branch feature/permission \\
+  --base main --actor developer --evidence 'PR 충돌 복구' 
+# 충돌이면 파일 해결 + git add 후 --continue, 아니면 --abort
+python3 .rail/runtime/rail.py collaboration pr-rebase feature-01 --continue \\
+  --actor developer --evidence '충돌 해소 및 재검토'
+```
+
+자세한 조건은 [두 트랙 실행 정책](docs/flow-and-proof.md)을 참조한다. 검증 근거는 **작업자가 작성한 기록**이며 논리적으로 자동 증명되거나 테스트가 실제 실행된다는 의미는 아니다. Git 충돌의 의미적 올바름도 Rail이 보증하지 않는다. 이 버전은 실행 시간 Hook/도구 호출 차단을 제공하지 않는다.
