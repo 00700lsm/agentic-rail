@@ -57,6 +57,8 @@ def require(*values):
 def begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch, providers, intensity=None, delegation='auto'):
     spec, sha = definition(root)
     if spec['version'] == 1:
+        if intensity is not None or delegation != 'auto':
+            raise RailError('Assurance options require development process v2')
         return legacy.begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch, providers)
     require(owner, contract_ref)
     if mode not in ('milestone', 'per-pr') or (mode == 'milestone' and not batch.strip()):
@@ -67,14 +69,15 @@ def begin(root, task_id, goal, paths, depends, owner, contract_ref, mode, batch,
     from .core import safe_id
     for provider in providers:
         safe_id(provider)
+    policy = assurance.configure(intensity, delegation) if intensity is not None else None
     task = start(root, task_id, goal, 'code', paths, depends)
     task['process'] = dict(version=2, definition_sha=sha, stage='analyze', cycle=0,
         owner=owner, contract_ref=contract_ref, integration_mode=mode, batch=batch,
         providers=list(dict.fromkeys(providers)), revision='', history=[], metrics=[],
         implementation_complete=False, integration_ready=False,
         review={'state': 'not_requested'}, decisions=dict(task['decisions']))
-    if intensity is not None:
-        task['process']['assurance'] = assurance.configure(intensity, delegation)
+    if policy is not None:
+        task['process']['assurance'] = policy
     return save(root, task)
 
 
@@ -153,7 +156,7 @@ def status(root, task_id):
         return legacy.status(root, task_id)
     return dict(task=task_id, state=task['state'], assurance_gate=assurance.evaluate(task, p['stage']), **p,
         live_integration='See collaboration status; readiness is not integration success',
-        assurance='Operator records only; no GitHub request, authenticated approval, test execution or merge')
+        assurance_notice='Operator records only; no GitHub request, authenticated approval, test execution or merge')
 
 
 def instructions(root, task_id):
@@ -199,8 +202,6 @@ def graph(root, format='mermaid'):
 def register(sub):
     # Keep v1 arguments available for preserved v1 projects.
     commands = legacy.register(sub)
-    start_parser = next(a for a in commands._name_parser_map['start']._actions if a.dest == 'id')
-    del start_parser  # Existing start parser is extended, not replaced.
     commands._name_parser_map['start'].add_argument('--intensity', type=int, choices=[1, 2, 3])
     commands._name_parser_map['start'].add_argument('--delegation', choices=assurance.MODES, default='auto')
     g = commands.add_parser('gate')
