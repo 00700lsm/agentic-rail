@@ -1,2 +1,2 @@
 """Flow orchestration and scoped decision context, without third-party dependencies."""
-__version__ = '0.3.0'
+__version__ = '0.4.0'
